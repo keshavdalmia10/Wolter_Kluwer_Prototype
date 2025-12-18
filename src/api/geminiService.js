@@ -9,7 +9,7 @@
  * - Research memory connections
  */
 
-const GEMINI_API_KEY = 'AIzaSyDO8BKrORV0-BxicUmgry1gjCpHKJmq8tU';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 // Using gemini-pro as 1.5-flash returned 404
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
