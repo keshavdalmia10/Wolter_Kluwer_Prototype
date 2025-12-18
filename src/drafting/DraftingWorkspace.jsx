@@ -19,28 +19,55 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { searchCitations, getDemoSuggestions } from '../api/citationService';
+import { searchOpinions, getOpinion } from '../api/courtListenerApi';
 import AutocompleteEditor from './AutocompleteEditor';
 import {
   detectUnsupportedClaims,
   enhanceCitationSuggestions,
   generateResearchMemoryEntry,
+
   checkAuthorityUpdates,
+  summarizeCourtOpinion,
 } from '../api/geminiService';
 
 // Fallback demo suggestions (used when APIs fail or are loading)
 const DEMO_SUGGESTIONS = getDemoSuggestions();
 
+const DOCUMENTS = [
+  {
+    id: 'tax-deduction',
+    title: 'Analysis: Individual Income Tax Deduction Disputes',
+    shortTitle: 'Tax Deduction Analysis',
+    lastModified: 'Modified today',
+    content: 'The taxpayer claimed business expense deductions under IRC section 162(a) require examination of the profit motive standard. In Smith v. Commissioner, 138 T.C. 121 (2012), the Tax Court held that substantiation requirements under section 274(d) apply strictly to entertainment expenses.'
+  },
+  {
+    id: 'irc-183',
+    title: 'Client Memo - IRC 183 Hobby Loss Rules',
+    shortTitle: 'Client Memo - IRC 183',
+    lastModified: 'Modified yesterday',
+    content: 'The determination of whether an activity is engaged in for profit under IRC section 183 is a facts and circumstances test. The nine factors outlined in Treas. Reg. § 1.183-2(b) provide guidance but no single factor is determinative. Recent case law emphasizes the importance of business-like operations and the taxpayer\'s expertise.'
+  },
+  {
+    id: 'charitable',
+    title: 'Research: Charitable Contribution Substantiation',
+    shortTitle: 'Charitable Contribution Research',
+    lastModified: 'Modified 3 days ago',
+    content: 'Substantiation of charitable contributions under IRC section 170(f)(8) is strictly construed. A contemporaneous written acknowledgment (CWA) must be obtained for any contribution of $250 or more. The CWA must contain the amount of cash and a description of any property contributed, and whether any goods or services were provided in consideration.'
+  }
+];
+
 const DraftingWorkspace = () => {
   const [activeFeature, setActiveFeature] = useState('smart');
+  const [activeDocId, setActiveDocId] = useState('tax-deduction');
+  const [docTitle, setDocTitle] = useState(DOCUMENTS[0].title);
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [activeSuggestions, setActiveSuggestions] = useState([]);
   const [inlineSuggestion, setInlineSuggestion] = useState(null);
   const [insertedCitations, setInsertedCitations] = useState([]);
   const [toaItems, setToaItems] = useState([]);
   const [researchMemory, setResearchMemory] = useState([]);
-  const [docText, setDocText] = useState(
-    'The taxpayer claimed business expense deductions under IRC section 162(a) require examination of the profit motive standard. In Smith v. Commissioner, 138 T.C. 121 (2012), the Tax Court held that substantiation requirements under section 274(d) apply strictly to entertainment expenses.'
-  );
+  const [docText, setDocText] = useState(DOCUMENTS[0].content);
   const [showAlert, setShowAlert] = useState(false);
   const [citationInserted, setCitationInserted] = useState(false);
   const [insertedCitation, setInsertedCitation] = useState(null);
@@ -53,15 +80,26 @@ const DraftingWorkspace = () => {
   const [suggestionSources, setSuggestionSources] = useState([]);
   const [isUsingLiveApi, setIsUsingLiveApi] = useState(false);
   const [apiError, setApiError] = useState(null);
-  
+
+
   // AI-powered features state
   const [aiUnsupportedClaims, setAiUnsupportedClaims] = useState([]);
   const [isAnalyzingClaims, setIsAnalyzingClaims] = useState(false);
   const [aiAuthorityUpdates, setAiAuthorityUpdates] = useState([]);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [aiEnhancedMode, setAiEnhancedMode] = useState(true);
-  
+
   const editorRef = useRef(null);
+  const reviewPanelRef = useRef(null);
+
+  // Auto-scroll to review panel when it opens
+  useEffect(() => {
+    if (showUpdateReview && reviewPanelRef.current) {
+      setTimeout(() => {
+        reviewPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [showUpdateReview]);
 
   // Debounced API-based suggestions from the live text.
   useEffect(() => {
@@ -158,7 +196,7 @@ const DraftingWorkspace = () => {
 
     const analyzeDocument = async () => {
       if (docText.length < 50) return;
-      
+
       setIsAnalyzingClaims(true);
       try {
         const claims = await detectUnsupportedClaims(docText);
@@ -249,9 +287,10 @@ const DraftingWorkspace = () => {
     setInsertedCitations([]);
     setToaItems([]);
     setResearchMemory([]);
-    setDocText(
-      'The taxpayer claimed business expense deductions under IRC section 162(a) require examination of the profit motive standard. In Smith v. Commissioner, 138 T.C. 121 (2012), the Tax Court held that substantiation requirements under section 274(d) apply strictly to entertainment expenses.'
-    );
+    const defaultDoc = DOCUMENTS[0];
+    setDocText(defaultDoc.content);
+    setActiveDocId(defaultDoc.id);
+    setDocTitle(defaultDoc.title);
     setShowAlert(false);
     setCitationInserted(false);
     setInsertedCitation(null);
@@ -259,6 +298,17 @@ const DraftingWorkspace = () => {
     setShowUpdateReview(false);
     setGarciaCitationAdded(false);
     setSelectionPos(0);
+  };
+
+  const handleDocumentChange = (doc) => {
+    setActiveDocId(doc.id);
+    setDocTitle(doc.title);
+    setDocText(doc.content);
+    // Reset transient states
+    setShowSuggestion(false);
+    setInlineSuggestion(null);
+    setShowAlert(false);
+    setShowUpdateReview(false);
   };
 
   const handleInsertCitation = (citation) => {
@@ -328,6 +378,191 @@ const DraftingWorkspace = () => {
     setTimeout(() => setShowUpdateReview(false), 2000);
   };
 
+  const handleViewCase = async (query) => {
+    // Open window immediately to prevent popup blocker
+    const caseWindow = window.open('', '_blank');
+    if (!caseWindow) {
+      alert('Please allow popups to view the case.');
+      return;
+    }
+
+    // Initial loading state
+    caseWindow.document.write(`
+      <html>
+        <head>
+          <title>Loading Case...</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f9fafb; color: #4b5563; }
+            .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 16px; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          </style>
+        </head>
+        <body>
+          <div class="spinner"></div>
+          <div>Searching and analyzing case...</div>
+        </body>
+      </html>
+    `);
+
+    try {
+      const results = await searchOpinions(query, { perPage: 1 });
+
+      // DEMO OVERRIDE: If searching for Garcia and result is irrelevant/missing, force the demo case
+      let result = results && results.length > 0 ? results[0] : null;
+      let opinion = null;
+      let isDemoFallback = false;
+
+      // Check if we need to use the Garcia fallback
+      // This ensures the specific "Garcia v. Commissioner (2024)" demo content is shown
+      // even if the real API returns irrelevant results (like Fisons Plc) or finds nothing.
+      if (query.includes('Garcia') && (!result || !result.title.includes('Garcia'))) {
+        isDemoFallback = true;
+        result = {
+          title: 'Garcia v. Commissioner',
+          citation: '11th Cir. (2024)',
+          metadata: {
+            dateFiled: new Date().toISOString(),
+            court: '11th Circuit',
+          },
+          url: 'https://www.courtlistener.com/opinion/garcia-v-commissioner-demo'
+        };
+        opinion = {
+          plain_text: `
+PRECEDENTIAL
+
+UNITED STATES COURT OF APPEALS
+FOR THE ELEVENTH CIRCUIT
+
+No. 23-14589
+
+MARIA GARCIA,
+Petitioner-Appellant,
+
+v.
+
+COMMISSIONER OF INTERNAL REVENUE,
+Respondent-Appellee.
+
+On Appeal from the United States Tax Court
+(Tax Court Dkt. No. 12345-22)
+
+Decided: December 15, 2024
+
+Before WILSON, JORDAN, and NEWSOM, Circuit Judges.
+
+JORDAN, Circuit Judge:
+
+This appeal presents a question of first impression in this Circuit regarding the substantiation requirements for charitable contributions under Internal Revenue Code § 170(f)(8). Specifically, we must decide whether a combination of electronic communications—emails and digital receipts—satisfies the "contemporaneous written acknowledgment" requirement when the formal acknowledgement letter was not received until after the taxpayer filed her return, but the emails containing all necessary information were received before the filing.
+
+The Tax Court, relying on Durden v. Commissioner, T.C. Memo. 2012-140, disallowed the deduction, holding that strict compliance required a single formal document. We disagree and reverse.
+
+I. BACKGROUND
+
+Maria Garcia contributed $5,000 to the "Save the Manatees Fund," a § 501(c)(3) organization. Upon making the online donation on December 20, 2021, she received an immediate automated email receipt. The email stated the amount of the contribution ($5,000) and stated "No goods or services were provided in exchange for this donation."
+
+Ms. Garcia filed her 2021 tax return on April 10, 2022, claiming the deduction. Two weeks later, she received a formal annual giving letter from the charity. The IRS disallowed the deduction during an examination, citing the fact that the formal letter was dated post-filing.
+
+II. DISCUSSION
+
+Section 170(f)(8)(A) provides that no deduction shall be allowed for any contribution of $250 or more unless the taxpayer substantiates the contribution by a contemporaneous written acknowledgment of the donee organization.
+
+The text of the statute requires three elements: (1) amount of cash; (2) whether goods or services were provided; and (3) a description of goods or services. The statute defines "contemporaneous" as being obtained by the taxpayer on or before the earlier of (i) the date on which the taxpayer files a return for the taxable year, or (ii) the due date (including extensions) for filing such return.
+
+In Durden, the Tax Court held that a subsequent letter could not cure a deficiency. However, unlike Durden, where the initial receipts lacked the "no goods or services" language, Ms. Garcia's initial email contained all required statutory elements.
+
+We hold that "written acknowledgment" under § 170(f)(8) is not limited to a single paper document or a specific "form." In the digital age, an email providing the specific information required by statute constitutes a written acknowledgment. Because Ms. Garcia received this email before filing her return, it was contemporaneous.
+
+To hold otherwise would elevate form over substance to an unreasonable degree not required by the plain text of the statute.
+
+III. CONCLUSION
+
+For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND for entry of decision in favor of the Petitioner.
+          `,
+          html_with_citations: null
+        };
+      } else if (result) {
+        // Normal flow for other cases
+        opinion = await getOpinion(result.id);
+      }
+
+
+      if (opinion) {
+        // Get the text content for summarization
+        const textContent = opinion.plain_text || opinion.html_with_citations?.replace(/<[^>]*>/g, '') || '';
+        let aiSummary = null;
+
+        if (textContent) {
+          aiSummary = await summarizeCourtOpinion(textContent);
+        }
+
+        const content = opinion.html_with_citations || opinion.plain_text || 'No text available.';
+        const summaryHtml = aiSummary ? `
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+            <div style="color: #1e40af; font-weight: 600; font-size: 1.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+              <span>✨</span> AI Summary
+            </div>
+            <div style="color: #1f2937; line-height: 1.6;">
+              ${aiSummary.replace(/\n/g, '<br/>')}
+            </div>
+            <div style="margin-top: 12px; font-size: 0.85em; color: #6b7280; font-style: italic;">
+              Generated by Gemini AI • Specific legal advice required for application
+            </div>
+          </div>
+        ` : '';
+
+        // Render final content
+        caseWindow.document.open();
+        caseWindow.document.write(`
+          <html>
+            <head>
+              <title>${result.title}</title>
+              <style>
+                body { font-family: system-ui, -apple-system, sans-serif; background: #f9fafb; color: #1f2937; line-height: 1.6; margin: 0; padding: 0; }
+                .header { background: #1e3a8a; color: white; padding: 20px 40px; }
+                .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+                .title { font-size: 1.5em; font-weight: 700; margin-bottom: 8px; }
+                .meta { color: #bfdbfe; font-size: 0.9em; display: flex; gap: 16px; margin-bottom: 16px; }
+                .meta a { color: white; text-decoration: underline; }
+                .card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }
+                .footer { text-align: center; color: #6b7280; font-size: 0.85em; margin-top: 40px; padding-bottom: 20px; }
+                a.button { display: inline-block; background: white; color: #1e3a8a; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: 500; font-size: 0.9em; margin-top: 8px; }
+                a.button:hover { background: #eff6ff; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div class="container" style="margin: 0 auto; padding: 0;">
+                  <h1 class="title">${result.title}</h1>
+                  <div class="meta">
+                    <span>${new Date(result.metadata.dateFiled).toLocaleDateString()}</span>
+                    <span>${result.citation || ''}</span>
+                    <span>${result.metadata.court || ''}</span>
+                  </div>
+                  ${result.url ? `<a href="${result.url}" target="_blank" class="button">View Source on CourtListener ↗</a>` : ''}
+                </div>
+              </div>
+              <div class="container">
+                ${summaryHtml}
+                <div class="card">
+                  ${content}
+                </div>
+                <div class="footer">
+                  Data provided by CourtListener API via Free Law Project
+                </div>
+              </div>
+            </body>
+          </html>
+        `);
+        caseWindow.document.close();
+      } else {
+        caseWindow.document.body.innerHTML = '<div style="text-align:center; padding: 40px;">Case not found or API unavailable.</div>';
+      }
+    } catch (error) {
+      console.error('Error viewing case:', error);
+      caseWindow.document.body.innerHTML = `<div style="text-align:center; padding: 40px; color: red;">Error loading case: ${error.message}</div>`;
+    }
+  };
+
   const alerts = [
     {
       type: 'outdated',
@@ -337,14 +572,7 @@ const DraftingWorkspace = () => {
       severity: 'medium',
       date: '2 days ago',
     },
-    {
-      type: 'new',
-      title: 'New Authority Published',
-      message:
-        'IRS Rev. Proc. 2024-12 updates substantiation requirements for charitable contributions',
-      severity: 'high',
-      date: '1 week ago',
-    },
+
   ];
 
   return (
@@ -364,8 +592,6 @@ const DraftingWorkspace = () => {
           <button className="text-sm hover:text-gray-200" onClick={resetDemo}>
             Reset Demo
           </button>
-          <button className="text-sm hover:text-gray-200">Help</button>
-          <button className="text-sm hover:text-gray-200">Settings</button>
         </div>
       </div>
 
@@ -373,11 +599,10 @@ const DraftingWorkspace = () => {
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setActiveFeature('smart')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeFeature === 'smart'
-                ? 'bg-blue-500 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${activeFeature === 'smart'
+              ? 'bg-blue-500 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <Lightbulb size={18} />
             Smart Suggestions
@@ -387,33 +612,30 @@ const DraftingWorkspace = () => {
               setActiveFeature('flags');
               setShowAlert(true);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeFeature === 'flags'
-                ? 'bg-blue-500 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${activeFeature === 'flags'
+              ? 'bg-blue-500 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <AlertCircle size={18} />
             Flags & Alerts
           </button>
           <button
             onClick={() => setActiveFeature('citations')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeFeature === 'citations'
-                ? 'bg-blue-500 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${activeFeature === 'citations'
+              ? 'bg-blue-500 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <Link size={18} />
             Auto Citations
           </button>
           <button
             onClick={() => setActiveFeature('memory')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeFeature === 'memory'
-                ? 'bg-blue-500 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${activeFeature === 'memory'
+              ? 'bg-blue-500 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <BookMarked size={18} />
             Research Memory
@@ -484,18 +706,21 @@ const DraftingWorkspace = () => {
           <div className="px-4 py-2">
             <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Recent Documents</h3>
             <div className="space-y-1">
-              <div className="bg-blue-50 border-l-4 border-blue-500 px-3 py-2 text-sm">
-                <div className="font-semibold text-gray-800">Tax Deduction Analysis</div>
-                <div className="text-xs text-gray-500">Modified today</div>
-              </div>
-              <div className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
-                <div className="font-medium">Client Memo - IRC 183</div>
-                <div className="text-xs text-gray-500">Modified yesterday</div>
-              </div>
-              <div className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
-                <div className="font-medium">Charitable Contribution Research</div>
-                <div className="text-xs text-gray-500">Modified 3 days ago</div>
-              </div>
+              {DOCUMENTS.map((doc) => (
+                <div
+                  key={doc.id}
+                  onClick={() => handleDocumentChange(doc)}
+                  className={`px-3 py-2 text-sm cursor-pointer ${activeDocId === doc.id
+                    ? 'bg-blue-50 border-l-4 border-blue-500 font-semibold text-gray-800'
+                    : 'text-gray-700 hover:bg-gray-50 font-medium'
+                    }`}
+                >
+                  <div className={activeDocId === doc.id ? 'font-semibold' : 'font-medium'}>
+                    {doc.shortTitle}
+                  </div>
+                  <div className="text-xs text-gray-500">{doc.lastModified}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -507,7 +732,8 @@ const DraftingWorkspace = () => {
                 <input
                   type="text"
                   className="text-3xl font-bold text-gray-800 border-none outline-none w-full mb-2"
-                  defaultValue="Analysis: Individual Income Tax Deduction Disputes"
+                  value={docTitle}
+                  onChange={(e) => setDocTitle(e.target.value)}
                   placeholder="Document Title"
                 />
                 <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -568,7 +794,7 @@ const DraftingWorkspace = () => {
                         </p>
                       </div>
                     )}
-                    
+
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3 text-sm text-gray-600">
                         <span className="font-medium">Edit your memo below</span>
@@ -731,16 +957,11 @@ const DraftingWorkspace = () => {
                       </div>
                     )}
 
-                    <h2 className="text-xl font-bold text-gray-800 mb-4 mt-6">III. Hobby Loss Rules Under IRC section 183</h2>
-                    <p className="text-gray-700 leading-relaxed mb-4">
-                      Activities not engaged in for profit are subject to limitation under{' '}
-                      <span className="bg-blue-100 px-1 rounded cursor-pointer hover:bg-blue-200 font-medium">IRC section 183</span>. The regulations at{' '}
-                      <span className="bg-blue-100 px-1 rounded cursor-pointer hover:bg-blue-200 font-medium">Treas. Reg. section 1.183-2(b)</span>{' '}
-                      establish a nine-factor test for determining profit motive. Courts apply these factors holistically, with no single factor being determinative.
-                    </p>
-
                     {showUpdateReview && (
-                      <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-400 rounded-lg p-6 mb-6 shadow-lg">
+                      <div
+                        ref={reviewPanelRef}
+                        className="bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-400 rounded-lg p-6 mb-6 shadow-lg scroll-mt-20"
+                      >
                         <div className="flex items-start gap-3 mb-4">
                           <Bell className="text-orange-600 flex-shrink-0 mt-1" size={24} />
                           <div>
@@ -787,13 +1008,16 @@ const DraftingWorkspace = () => {
                             <button
                               onClick={handleAddGarciaCitation}
                               disabled={garciaCitationAdded}
-                              className={`flex-1 px-4 py-2 rounded text-sm font-medium ${
-                                garciaCitationAdded ? 'bg-green-500 text-white cursor-not-allowed' : 'bg-orange-600 text-white hover:bg-orange-700'
-                              }`}
+                              className={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${garciaCitationAdded
+                                ? 'bg-green-600 text-white cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
                             >
-                              {garciaCitationAdded ? 'Citation Added' : 'Add Garcia Citation'}
+                              {garciaCitationAdded ? 'Citation Added' : 'Add Citation'}
                             </button>
-                            <button className="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 text-sm font-medium">
+                            <button
+                              onClick={() => handleViewCase('Garcia v. Commissioner')}
+                              className="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 text-sm font-medium">
                               View Full Case
                             </button>
                             <button
@@ -806,6 +1030,14 @@ const DraftingWorkspace = () => {
                         </div>
                       </div>
                     )}
+
+                    <h2 className="text-xl font-bold text-gray-800 mb-4 mt-6">III. Hobby Loss Rules Under IRC section 183</h2>
+                    <p className="text-gray-700 leading-relaxed mb-4">
+                      Activities not engaged in for profit are subject to limitation under{' '}
+                      <span className="bg-blue-100 px-1 rounded cursor-pointer hover:bg-blue-200 font-medium">IRC section 183</span>. The regulations at{' '}
+                      <span className="bg-blue-100 px-1 rounded cursor-pointer hover:bg-blue-200 font-medium">Treas. Reg. section 1.183-2(b)</span>{' '}
+                      establish a nine-factor test for determining profit motive. Courts apply these factors holistically, with no single factor being determinative.
+                    </p>
 
                     <h2 className="text-xl font-bold text-gray-800 mb-4 mt-6">Conclusion</h2>
                     <p className="text-gray-700 leading-relaxed mb-4">
@@ -866,29 +1098,7 @@ const DraftingWorkspace = () => {
                             ))}
                           </>
                         ) : (
-                          <div className="bg-green-50 border border-green-500 rounded-lg p-4">
-                            <div className="flex items-center gap-2 text-green-800 font-semibold mb-2">
-                              <CheckCircle size={18} />
-                              Citation Inserted Successfully
-                            </div>
-                            <div className="text-sm text-gray-700 mb-3">
-                              <strong>{insertedCitation?.title}</strong> has been:
-                            </div>
-                            <ul className="text-xs text-gray-700 space-y-1 ml-4">
-                              <li>Added to your document with proper formatting</li>
-                              <li>Included in the Table of Authorities</li>
-                              <li>Saved to Research Memory with supporting quote</li>
-                              <li>Linked to the specific claim in your text</li>
-                            </ul>
-                            <div className="mt-3 pt-3 border-t border-green-200">
-                              <div className="text-xs text-gray-600 mb-1">
-                                <strong>Quote saved:</strong>
-                              </div>
-                              <div className="text-xs italic bg-white p-2 rounded">
-                                {insertedCitation?.quote.substring(0, 100)}...
-                              </div>
-                            </div>
-                          </div>
+                          null
                         )}
                       </div>
                     )}
@@ -910,14 +1120,12 @@ const DraftingWorkspace = () => {
                         <span className="text-xs text-gray-500 font-medium">AI Analysis</span>
                         <button
                           onClick={() => setAiEnhancedMode(!aiEnhancedMode)}
-                          className={`w-8 h-4 rounded-full p-0.5 transition-colors ${
-                            aiEnhancedMode ? 'bg-blue-500' : 'bg-gray-300'
-                          }`}
+                          className={`w-8 h-4 rounded-full p-0.5 transition-colors ${aiEnhancedMode ? 'bg-blue-500' : 'bg-gray-300'
+                            }`}
                         >
                           <div
-                            className={`w-3 h-3 rounded-full bg-white shadow-sm transform transition-transform ${
-                              aiEnhancedMode ? 'translate-x-4' : 'translate-x-0'
-                            }`}
+                            className={`w-3 h-3 rounded-full bg-white shadow-sm transform transition-transform ${aiEnhancedMode ? 'translate-x-4' : 'translate-x-0'
+                              }`}
                           />
                         </button>
                       </div>
@@ -943,7 +1151,9 @@ const DraftingWorkspace = () => {
                           <p className="text-xs text-gray-700 mb-2">
                             {update.summary || update.message}
                           </p>
-                          <button className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50">
+                          <button
+                            onClick={() => setShowUpdateReview(true)}
+                            className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 bg-orange-600 text-white hover:bg-orange-700">
                             Review Impact
                           </button>
                         </div>
@@ -953,23 +1163,26 @@ const DraftingWorkspace = () => {
                       {activeFeature === 'flags' && !isCheckingUpdates && aiAuthorityUpdates.length === 0 && alerts.map((alert, idx) => (
                         <div
                           key={idx}
-                          className={`border-l-4 p-3 rounded ${
-                            alert.severity === 'high' ? 'border-red-500 bg-red-50' : 'border-orange-500 bg-orange-50'
-                          }`}
+                          className={`border-l-4 p-3 rounded ${alert.severity === 'high' ? 'border-red-500 bg-red-50' : 'border-orange-500 bg-orange-50'
+                            }`}
                         >
                           <div className="flex items-start justify-between mb-1">
                             <span className="font-semibold text-sm text-gray-800">{alert.title}</span>
                             <span className="text-xs text-gray-500">{alert.date}</span>
                           </div>
                           <p className="text-xs text-gray-700 mb-2">{alert.message}</p>
-                          <button className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50">Review</button>
+                          <button
+                            onClick={() => setShowUpdateReview(true)}
+                            className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 text-orange-600 font-medium">
+                            Review
+                          </button>
                         </div>
                       ))}
                     </div>
 
                     <div className="mt-4">
                       <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Unsupported Claims</h4>
-                      
+
                       {aiUnsupportedClaims.length > 0 ? (
                         aiUnsupportedClaims.map((claim, idx) => (
                           <div key={idx} className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded relative group">
@@ -1161,6 +1374,7 @@ const DraftingWorkspace = () => {
           </div>
         </div>
       </div>
+
     </div>
   );
 };

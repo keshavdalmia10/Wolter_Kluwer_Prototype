@@ -378,14 +378,26 @@ const WorkflowOrchestrator = () => {
     const startY = 150;
     const newModules = template.modules.map((moduleId, index) => {
       const moduleType = availableModules.find((m) => m.id === moduleId);
+      const newId = `${moduleId}-${Date.now()}-${index}`;
       return {
         ...moduleType,
-        id: `${moduleId}-${Date.now()}-${index}`,
+        id: newId,
         x: 400,
         y: startY + index * spacing,
       };
     });
     setCanvasModules(newModules);
+
+    // Auto-connect template modules
+    const newConnections = [];
+    for (let i = 0; i < newModules.length - 1; i++) {
+      newConnections.push({
+        from: newModules[i].id,
+        to: newModules[i + 1].id,
+      });
+    }
+    setConnections(newConnections);
+
     setShowTemplateModal(false);
     setShowTemplatesLibrary(false);
   };
@@ -549,15 +561,29 @@ const WorkflowOrchestrator = () => {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      setCanvasModules([
-        ...canvasModules,
-        {
-          ...draggedModule,
-          id: `${draggedModule.id}-${Date.now()}`,
-          x,
-          y,
-        },
-      ]);
+
+      const newModule = {
+        ...draggedModule,
+        id: `${draggedModule.id}-${Date.now()}`,
+        x,
+        y,
+      };
+
+      setCanvasModules((prevModules) => {
+        const updatedModules = [...prevModules, newModule];
+
+        // Auto-connect to the last module if one exists
+        if (prevModules.length > 0) {
+          const lastModule = prevModules[prevModules.length - 1];
+          setConnections((prevConnections) => [
+            ...prevConnections,
+            { from: lastModule.id, to: newModule.id }
+          ]);
+        }
+
+        return updatedModules;
+      });
+
       setDraggedModule(null);
     }
   };
@@ -628,8 +654,6 @@ const WorkflowOrchestrator = () => {
           <button className="text-sm hover:text-gray-200" onClick={() => setShowBuilder(false)}>
             Close Builder
           </button>
-          <button className="text-sm hover:text-gray-200">Help</button>
-          <button className="text-sm hover:text-gray-200">Settings</button>
         </div>
       </div>
 
@@ -640,9 +664,8 @@ const WorkflowOrchestrator = () => {
               setShowMetrics(false);
               setShowBuilder(false);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              !showMetrics && !showBuilder ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${!showMetrics && !showBuilder ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <GitBranch size={18} />
             Workflows
@@ -652,9 +675,8 @@ const WorkflowOrchestrator = () => {
               setShowMetrics(true);
               setShowBuilder(false);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              showMetrics ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${showMetrics ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <BarChart3 size={18} />
             Analytics
@@ -686,9 +708,8 @@ const WorkflowOrchestrator = () => {
                   <div
                     key={workflow.id}
                     onClick={() => setActiveWorkflow(workflow)}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      activeWorkflow?.id === workflow.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'
-                    }`}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${activeWorkflow?.id === workflow.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'
+                      }`}
                   >
                     <div className="font-semibold text-gray-800 text-sm mb-1">{workflow.name}</div>
                     <div className="text-xs text-gray-600 mb-2">{workflow.description}</div>
@@ -813,9 +834,8 @@ const WorkflowOrchestrator = () => {
                   return (
                     <div
                       key={module.id}
-                      className={`absolute ${module.color} text-white rounded-lg shadow-lg group transition-shadow ${
-                        isDragging ? 'cursor-grabbing shadow-2xl z-50' : 'cursor-grab'
-                      }`}
+                      className={`absolute ${module.color} text-white rounded-lg shadow-lg group transition-shadow ${isDragging ? 'cursor-grabbing shadow-2xl z-50' : 'cursor-grab'
+                        }`}
                       style={{ left: `${module.x - 80}px`, top: `${module.y - 40}px`, width: '160px', height: '80px', userSelect: 'none', touchAction: 'none' }}
                       onMouseDown={(e) => handleCanvasModuleMouseDown(e, module.id)}
                     >
@@ -860,9 +880,8 @@ const WorkflowOrchestrator = () => {
                       <button
                         onClick={handleRunWorkflow}
                         disabled={workflowRunning}
-                        className={`px-6 py-2 rounded-lg font-medium flex items-center gap-2 ${
-                          workflowRunning ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'
-                        }`}
+                        className={`px-6 py-2 rounded-lg font-medium flex items-center gap-2 ${workflowRunning ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'
+                          }`}
                       >
                         <Play size={18} />
                         {workflowRunning ? 'Running...' : 'Run Workflow'}
@@ -912,18 +931,16 @@ const WorkflowOrchestrator = () => {
                           )}
 
                           <div
-                            className={`flex items-start gap-4 p-4 rounded-lg border-2 transition-all ${
-                              isCurrent
-                                ? 'border-blue-500 bg-blue-50 shadow-md'
-                                : isCompleted
+                            className={`flex items-start gap-4 p-4 rounded-lg border-2 transition-all ${isCurrent
+                              ? 'border-blue-500 bg-blue-50 shadow-md'
+                              : isCompleted
                                 ? 'border-green-500 bg-green-50'
                                 : 'border-gray-200 bg-white'
-                            }`}
+                              }`}
                           >
                             <div
-                              className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                                isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
-                              }`}
+                              className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
+                                }`}
                             >
                               {isCompleted ? <CheckCircle size={20} /> : isCurrent ? <Zap size={20} /> : <Circle size={20} />}
                             </div>
@@ -936,13 +953,12 @@ const WorkflowOrchestrator = () => {
                                 </div>
                                 <div className="text-right">
                                   <div
-                                    className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                                      isCompleted
-                                        ? 'bg-green-100 text-green-700'
-                                        : isCurrent
+                                    className={`text-xs font-semibold px-3 py-1 rounded-full ${isCompleted
+                                      ? 'bg-green-100 text-green-700'
+                                      : isCurrent
                                         ? 'bg-blue-100 text-blue-700'
                                         : 'bg-gray-100 text-gray-600'
-                                    }`}
+                                      }`}
                                   >
                                     {isCompleted ? 'Completed' : isCurrent ? 'In Progress' : 'Pending'}
                                   </div>
@@ -1201,9 +1217,8 @@ const WorkflowOrchestrator = () => {
                   <button
                     key={category}
                     onClick={() => setSelectedCategory(category)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      selectedCategory === category ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === category ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
                   >
                     {category}
                   </button>
