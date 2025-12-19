@@ -375,7 +375,8 @@ const DraftingWorkspace = () => {
         quote: garciaMemory.quote,
       },
     ]);
-    setTimeout(() => setShowUpdateReview(false), 2000);
+    setShowUpdateReview(false);
+    setShowAlert(false);
   };
 
   const handleViewCase = async (query) => {
@@ -405,29 +406,56 @@ const DraftingWorkspace = () => {
     `);
 
     try {
-      const results = await searchOpinions(query, { perPage: 1 });
+      // Use robust check for "Garcia" in query
+      const isGarciaQuery = query && typeof query === 'string' && query.toLowerCase().includes('garcia');
 
-      // DEMO OVERRIDE: If searching for Garcia and result is irrelevant/missing, force the demo case
-      let result = results && results.length > 0 ? results[0] : null;
+      let result = null;
       let opinion = null;
       let isDemoFallback = false;
 
-      // Check if we need to use the Garcia fallback
-      // This ensures the specific "Garcia v. Commissioner (2024)" demo content is shown
-      // even if the real API returns irrelevant results (like Fisons Plc) or finds nothing.
-      if (query.includes('Garcia') && (!result || !result.title.includes('Garcia'))) {
-        isDemoFallback = true;
-        result = {
-          title: 'Garcia v. Commissioner',
-          citation: '11th Cir. (2024)',
-          metadata: {
-            dateFiled: new Date().toISOString(),
-            court: '11th Circuit',
-          },
-          url: 'https://www.courtlistener.com/opinion/garcia-v-commissioner-demo'
-        };
-        opinion = {
-          plain_text: `
+      if (isGarciaQuery) {
+        console.log('Processing Garcia query:', query);
+        try {
+          console.log('Attempting to fetch specific Garcia opinion (ID: 10378088)...');
+          // Attempt to fetch the specific case requested by user
+          // ID: 10378088 -> Rita Arguijo Garcia v. Commissioner of Social Security
+          // We use the ID explicitly to try to get the real case
+          const realOpinion = await getOpinion(10378088);
+
+          // STRICT VALIDATION: Ensure the fetched opinion is actually Garcia
+          const title = realOpinion.case_name_full || realOpinion.caseName || '';
+          if (!title.toLowerCase().includes('garcia')) {
+            throw new Error(`Fetched opinion title "${title}" does not contain Garcia`);
+          }
+
+          if (realOpinion && (realOpinion.plain_text || realOpinion.html_with_citations)) {
+            opinion = realOpinion;
+            result = {
+              title: title || 'Garcia v. Commissioner',
+              citation: realOpinion.citation ? (Array.isArray(realOpinion.citation) ? realOpinion.citation[0] : realOpinion.citation) : '11th Cir. (2024)',
+              metadata: {
+                dateFiled: realOpinion.date_filed || new Date().toISOString(),
+                court: '11th Circuit',
+              },
+              url: `https://www.courtlistener.com${realOpinion.absolute_url}`
+            };
+          } else {
+            throw new Error('No content in real opinion');
+          }
+        } catch (e) {
+          console.warn('Failed to fetch real Garcia opinion or validation failed, using demo fallback:', e.message);
+          isDemoFallback = true;
+          result = {
+            title: 'Rita Arguijo Garcia v. Commissioner of Social Security',
+            citation: '11th Cir. (2024)',
+            metadata: {
+              dateFiled: new Date().toISOString(),
+              court: '11th Circuit',
+            },
+            url: 'https://www.courtlistener.com/opinion/10378088/rita-arguijo-garcia-v-commissioner-of-social-security/'
+          };
+          opinion = {
+            plain_text: `
 PRECEDENTIAL
 
 UNITED STATES COURT OF APPEALS
@@ -477,12 +505,18 @@ To hold otherwise would elevate form over substance to an unreasonable degree no
 III. CONCLUSION
 
 For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND for entry of decision in favor of the Petitioner.
-          `,
-          html_with_citations: null
-        };
-      } else if (result) {
+            `,
+            html_with_citations: null
+          };
+        }
+      } else {
         // Normal flow for other cases
-        opinion = await getOpinion(result.id);
+        const results = await searchOpinions(query, { perPage: 1 });
+        result = results && results.length > 0 ? results[0] : null;
+
+        if (result) {
+          opinion = await getOpinion(result.id);
+        }
       }
 
 
@@ -928,7 +962,7 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
                       )}
                     </p>
 
-                    {activeFeature === 'flags' && showAlert && (
+                    {activeFeature === 'flags' && showAlert && !garciaCitationAdded && (
                       <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4">
                         <div className="flex items-start gap-3">
                           <Bell className="text-orange-600 flex-shrink-0 mt-1" size={20} />
@@ -1139,6 +1173,19 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
                     )}
 
                     <div className="space-y-3">
+                      {garciaCitationAdded && (
+                        <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-4">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="text-green-600 flex-shrink-0" size={20} />
+                            <div>
+                              <div className="font-semibold text-green-900">All Citations Up to Date</div>
+                              <div className="text-sm text-green-800">
+                                No unsupported claims or outdated authorities detected.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {/* AI-Detected Authority Updates */}
                       {aiAuthorityUpdates.map((update, idx) => (
                         <div key={`update-${idx}`} className="border-l-4 border-orange-500 bg-orange-50 p-3 rounded">
@@ -1160,7 +1207,7 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
                       ))}
 
                       {/* Hardcoded alerts fallback (if no AI alerts yet) */}
-                      {activeFeature === 'flags' && !isCheckingUpdates && aiAuthorityUpdates.length === 0 && alerts.map((alert, idx) => (
+                      {activeFeature === 'flags' && !isCheckingUpdates && aiAuthorityUpdates.length === 0 && !garciaCitationAdded && alerts.map((alert, idx) => (
                         <div
                           key={idx}
                           className={`border-l-4 p-3 rounded ${alert.severity === 'high' ? 'border-red-500 bg-red-50' : 'border-orange-500 bg-orange-50'

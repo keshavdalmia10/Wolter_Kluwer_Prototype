@@ -35,14 +35,25 @@ const WorkflowOrchestrator = () => {
   const [showTemplatesLibrary, setShowTemplatesLibrary] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+
   const [isExporting, setIsExporting] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.1, 1));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.1, 0.2));
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
 
   const availableModules = [
     { id: 'trigger', name: 'Trigger', icon: Zap, color: 'bg-yellow-500', description: 'Start workflow' },
     { id: 'extract', name: 'Extract Data', icon: FileText, color: 'bg-blue-500', description: 'Parse documents' },
     { id: 'analyze', name: 'AI Analysis', icon: Target, color: 'bg-purple-500', description: 'Process with AI' },
     { id: 'validate', name: 'Validate', icon: CheckCircle, color: 'bg-green-500', description: 'Check rules' },
-    { id: 'route', name: 'Route/Assign', icon: Users, color: 'bg-orange-500', description: 'Assign to team' },
+    { id: 'route', name: 'Route/Assign', icon: Users, color: 'bg-indigo-600', description: 'Assign to team' },
     { id: 'output', name: 'Output', icon: Download, color: 'bg-gray-700', description: 'Generate result' },
   ];
 
@@ -217,6 +228,8 @@ const WorkflowOrchestrator = () => {
           agent: 'Assignment Service',
           detail: 'Routing to team, posting client tasks',
           duration: '7 min',
+          color: 'bg-indigo-600',
+          icon: Users,
         },
         {
           id: 's6',
@@ -309,6 +322,8 @@ const WorkflowOrchestrator = () => {
           agent: 'Assignment Service',
           detail: 'Notify reviewer, stage client tasks',
           duration: '7 min',
+          color: 'bg-indigo-600',
+          icon: Users,
         },
         {
           id: 's6',
@@ -559,8 +574,8 @@ const WorkflowOrchestrator = () => {
     e.preventDefault();
     if (draggedModule) {
       const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = (e.clientX - rect.left - pan.x) / zoom;
+      const y = (e.clientY - rect.top - pan.y) / zoom;
 
       const newModule = {
         ...draggedModule,
@@ -593,15 +608,17 @@ const WorkflowOrchestrator = () => {
     const module = canvasModules.find((m) => m.id === moduleId);
     if (!module) return;
     const rect = e.currentTarget.closest('.canvas-area').getBoundingClientRect();
-    setDraggingCanvasModule(moduleId);
-    setDragOffset({ x: e.clientX - rect.left - module.x, y: e.clientY - rect.top - module.y });
+    setDragOffset({
+      x: (e.clientX - rect.left - pan.x) / zoom - module.x,
+      y: (e.clientY - rect.top - pan.y) / zoom - module.y,
+    });
   };
 
   const handleCanvasMouseMove = (e) => {
     if (!draggingCanvasModule) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const newX = e.clientX - rect.left - dragOffset.x;
-    const newY = e.clientY - rect.top - dragOffset.y;
+    const newX = (e.clientX - rect.left - pan.x) / zoom - dragOffset.x;
+    const newY = (e.clientY - rect.top - pan.y) / zoom - dragOffset.y;
     setCanvasModules((mods) => mods.map((m) => (m.id === draggingCanvasModule ? { ...m, x: newX, y: newY } : m)));
   };
 
@@ -637,6 +654,20 @@ const WorkflowOrchestrator = () => {
         return prev;
       });
     }, 2000);
+  };
+
+  const handleWheel = (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY * -0.001;
+      setZoom((prev) => Math.min(Math.max(prev + delta, 0.2), 1));
+    } else {
+      setPan((prev) => {
+        const newX = Math.max(Math.min(prev.x - e.deltaX, 3000), -3000);
+        const newY = Math.max(Math.min(prev.y - e.deltaY, 3000), -3000);
+        return { x: newX, y: newY };
+      });
+    }
   };
 
   return (
@@ -729,19 +760,7 @@ const WorkflowOrchestrator = () => {
               })}
             </div>
 
-            <div className="mt-6">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Templates</h3>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100">
-                  <div className="font-medium text-gray-700 text-sm">Energy Tax Credit Research</div>
-                  <div className="text-xs text-gray-500 mt-1">Standard template</div>
-                </div>
-                <div className="p-3 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100">
-                  <div className="font-medium text-gray-700 text-sm">Compliance Checklist Generator</div>
-                  <div className="text-xs text-gray-500 mt-1">Regulatory review</div>
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
 
@@ -764,6 +783,11 @@ const WorkflowOrchestrator = () => {
                     <button className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
                       Save Workflow
                     </button>
+                    <div className="flex items-center bg-gray-100 rounded-lg p-1 ml-2 border border-gray-300">
+                      <button onClick={handleZoomOut} className="p-1 hover:bg-white rounded text-gray-600" title="Zoom Out">-</button>
+                      <span className="mx-2 text-xs font-medium text-gray-600 w-8 text-center">{Math.round(zoom * 100)}%</span>
+                      <button onClick={handleZoomIn} className="p-1 hover:bg-white rounded text-gray-600" title="Zoom In">+</button>
+                    </div>
                   </div>
                 </div>
 
@@ -795,68 +819,109 @@ const WorkflowOrchestrator = () => {
                 onMouseMove={handleCanvasMouseMove}
                 onMouseUp={handleCanvasMouseUp}
                 onMouseLeave={handleCanvasMouseUp}
+                onWheel={handleWheel}
                 style={{
                   backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
-                  backgroundSize: '20px 20px',
+                  backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+                  backgroundPosition: `${pan.x}px ${pan.y}px`,
                 }}
               >
-                {canvasModules.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="text-center text-gray-400">
-                      <GitBranch size={64} className="mx-auto mb-4 opacity-50" />
-                      <p className="text-lg font-medium">Drag modules here to build your workflow</p>
-                      <p className="text-sm">Start with a Trigger module</p>
-                    </div>
-                  </div>
-                )}
-
-                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
-                  {connections.map((conn, idx) => {
-                    const fromModule = canvasModules.find((m) => m.id === conn.from);
-                    const toModule = canvasModules.find((m) => m.id === conn.to);
-                    if (!fromModule || !toModule) return null;
-                    const x1 = fromModule.x + 80;
-                    const y1 = fromModule.y + 40;
-                    const x2 = toModule.x + 80;
-                    const y2 = toModule.y + 40;
-                    return <line key={idx} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrowhead)" />;
-                  })}
-                  <defs>
-                    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-                      <polygon points="0 0, 10 3, 0 6" fill="#3b82f6" />
-                    </marker>
-                  </defs>
-                </svg>
-
-                {canvasModules.map((module) => {
-                  const Icon = module.icon;
-                  const isDragging = draggingCanvasModule === module.id;
-                  return (
-                    <div
-                      key={module.id}
-                      className={`absolute ${module.color} text-white rounded-lg shadow-lg group transition-shadow ${isDragging ? 'cursor-grabbing shadow-2xl z-50' : 'cursor-grab'
-                        }`}
-                      style={{ left: `${module.x - 80}px`, top: `${module.y - 40}px`, width: '160px', height: '80px', userSelect: 'none', touchAction: 'none' }}
-                      onMouseDown={(e) => handleCanvasModuleMouseDown(e, module.id)}
-                    >
-                      <div className="p-3 h-full flex flex-col justify-center items-center relative">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveModule(module.id);
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className="absolute top-1 right-1 w-5 h-5 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        >
-                          <span className="text-xs">×</span>
-                        </button>
-                        <Icon size={24} className="mb-1 pointer-events-none" />
-                        <div className="font-semibold text-sm text-center pointer-events-none">{module.name}</div>
+                <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top left', width: '100%', height: '100%' }}>
+                  {canvasModules.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ transform: `scale(${1 / zoom})` }}>
+                      <div className="text-center text-gray-400">
+                        <GitBranch size={64} className="mx-auto mb-4 opacity-50" />
+                        <p className="text-lg font-medium">Drag modules here to build your workflow</p>
+                        <p className="text-sm">Start with a Trigger module</p>
                       </div>
                     </div>
-                  );
-                })}
+                  )}
+
+                  <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                    {connections.map((conn, idx) => {
+                      const fromModule = canvasModules.find((m) => m.id === conn.from);
+                      const toModule = canvasModules.find((m) => m.id === conn.to);
+                      if (!fromModule || !toModule) return null;
+
+                      // Calculate centers
+                      const x1 = fromModule.x + 80;
+                      const y1 = fromModule.y + 40;
+                      const x2 = toModule.x + 80;
+                      const y2 = toModule.y + 40;
+
+                      // Gap constant
+                      const gap = 0;
+
+                      // Source point (Right center of fromModule)
+                      const startX = fromModule.x + 80 + gap;
+                      const startY = fromModule.y;
+
+                      // Target point (Left center of toModule)
+                      const endX = toModule.x - 80 - gap;
+                      const endY = toModule.y;
+
+                      // Control points for cubic bezier (curvature)
+                      const dist = Math.abs(endX - startX);
+                      const cp1x = startX + (dist * 0.4); // Control point 1 towards right
+                      const cp1y = startY;
+                      const cp2x = endX - (dist * 0.4);   // Control point 2 towards left
+                      const cp2y = endY;
+
+                      const pathData = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+
+
+
+                      return (
+                        <g key={idx}>
+                          <path
+                            d={pathData}
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth={3 / zoom}
+                            strokeDasharray={`${8 / zoom} ${6 / zoom}`}
+                            markerEnd="url(#arrowhead)"
+                          />
+                        </g>
+                      );
+                    })}
+                    <defs>
+                      <marker id="arrowhead" markerWidth="5" markerHeight="5" refX="5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+                        <polygon points="0 0, 5 2.5, 0 5" fill="#3b82f6" />
+                      </marker>
+                    </defs>
+                  </svg>
+
+                  {canvasModules.map((module) => {
+                    const Icon = module.icon;
+                    const isDragging = draggingCanvasModule === module.id;
+                    return (
+                      <div
+                        key={module.id}
+                        className={`absolute ${module.color} text-white rounded-lg shadow-lg group transition-shadow ${isDragging ? 'cursor-grabbing shadow-2xl z-50' : 'cursor-grab'
+                          }`}
+                        style={{ left: `${module.x - 80}px`, top: `${module.y - 40}px`, width: '160px', height: '80px', userSelect: 'none', touchAction: 'none' }}
+                        onMouseDown={(e) => handleCanvasModuleMouseDown(e, module.id)}
+                      >
+                        <div className="p-3 h-full flex flex-col justify-center items-center relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveModule(module.id);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="absolute top-1 right-1 w-5 h-5 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          >
+                            <span className="text-xs">×</span>
+                          </button>
+                          <Icon size={24} className="mb-1 pointer-events-none" />
+                          <div className="font-semibold text-sm text-center pointer-events-none">{module.name}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+
 
               <div className="bg-blue-50 border-t border-blue-200 p-3">
                 <div className="flex items-start gap-2 text-sm text-blue-900">
@@ -1252,52 +1317,56 @@ const WorkflowOrchestrator = () => {
         </div>
       </div>
 
-      {showTemplateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl">
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-800">Choose a Workflow Template</h2>
-              <button onClick={() => setShowTemplateModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">
-                ×
-              </button>
-            </div>
+      {
+        showTemplateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl">
+              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">Choose a Workflow Template</h2>
+                <button onClick={() => setShowTemplateModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">
+                  ×
+                </button>
+              </div>
 
-            <div className="p-6 space-y-4">
-              {workflowTemplates.slice(0, 4).map((template) => (
-                <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-bold text-gray-800 mb-1">{template.name}</h3>
-                      <p className="text-sm text-gray-600">{template.description}</p>
+              <div className="p-6 space-y-4">
+                {workflowTemplates.slice(0, 4).map((template) => (
+                  <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-bold text-gray-800 mb-1">{template.name}</h3>
+                        <p className="text-sm text-gray-600">{template.description}</p>
+                      </div>
+                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded ml-3 flex-shrink-0">{template.steps} steps</span>
                     </div>
-                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded ml-3 flex-shrink-0">{template.steps} steps</span>
+                    <button
+                      onClick={() => handleUseTemplate(template)}
+                      className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+                    >
+                      Use Template
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleUseTemplate(template)}
-                    className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
-                  >
-                    Use Template
-                  </button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            <div className="border-t px-6 py-4 bg-gray-50">
-              <button onClick={() => setShowTemplateModal(false)} className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">
-                Cancel
-              </button>
+              <div className="border-t px-6 py-4 bg-gray-50">
+                <button onClick={() => setShowTemplateModal(false)} className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-      {isExporting && (
-        <div className="fixed top-4 right-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-          Generating report...
-        </div>
-      )}
-    </div>
+      {
+        isExporting && (
+          <div className="fixed top-4 right-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+            Generating report...
+          </div>
+        )
+      }
+    </div >
   );
 };
 
