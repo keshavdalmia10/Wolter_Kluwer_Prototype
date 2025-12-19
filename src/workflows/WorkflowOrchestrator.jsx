@@ -31,10 +31,11 @@ const WorkflowOrchestrator = () => {
   const [connections, setConnections] = useState([]);
   const [draggingCanvasModule, setDraggingCanvasModule] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showTemplatesLibrary, setShowTemplatesLibrary] = useState(false);
-  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [activeDropdownModuleId, setActiveDropdownModuleId] = useState(null);
+  const [configuringModule, setConfiguringModule] = useState(null);
+  const [configFormData, setConfigFormData] = useState({});
+  const [configStep, setConfigStep] = useState(1);
+
 
   const [isExporting, setIsExporting] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -50,135 +51,36 @@ const WorkflowOrchestrator = () => {
 
   const availableModules = [
     { id: 'trigger', name: 'Trigger', icon: Zap, color: 'bg-yellow-500', description: 'Start workflow' },
-    { id: 'extract', name: 'Extract Data', icon: FileText, color: 'bg-blue-500', description: 'Parse documents' },
     { id: 'analyze', name: 'AI Analysis', icon: Target, color: 'bg-purple-500', description: 'Process with AI' },
     { id: 'validate', name: 'Validate', icon: CheckCircle, color: 'bg-green-500', description: 'Check rules' },
     { id: 'route', name: 'Route/Assign', icon: Users, color: 'bg-indigo-600', description: 'Assign to team' },
     { id: 'output', name: 'Output', icon: Download, color: 'bg-gray-700', description: 'Generate result' },
   ];
 
-  const workflowTemplates = [
-    {
-      id: 'cp2000',
-      name: 'IRS CP2000 Notice Response',
-      description: 'Automated workflow for parsing CP2000 notices, reconciling discrepancies, and drafting response letters',
-      category: 'Tax Compliance',
-      steps: 6,
-      modules: ['trigger', 'extract', 'analyze', 'validate', 'route', 'output'],
-    },
-    {
-      id: '1099k',
-      name: '1099-K Threshold Audit',
-      description: 'Scan payment processor data, identify threshold breaches, and generate client outreach materials',
-      category: 'Tax Compliance',
-      steps: 5,
-      modules: ['trigger', 'extract', 'analyze', 'validate', 'output'],
-    },
-    {
-      id: 'erc',
-      name: 'ERC Claim Validation',
-      description: 'Verify eligibility for Employee Retention Credit, calculate amounts, and prepare 941-X filings',
-      category: 'Tax Compliance',
-      steps: 6,
-      modules: ['trigger', 'extract', 'analyze', 'validate', 'route', 'output'],
-    },
-    {
-      id: 'fincen',
-      name: 'FinCEN BOI Filing',
-      description: 'Collect ownership documents, identify beneficial owners, and prepare FinCEN beneficial ownership reports',
-      category: 'Tax Compliance',
-      steps: 5,
-      modules: ['trigger', 'extract', 'analyze', 'validate', 'output'],
-    },
-    {
-      id: 'quarterly-review',
-      name: 'Quarterly Tax Review',
-      description: 'Automated quarterly client tax position review with recommendations',
-      category: 'Client Management',
-      steps: 7,
-      modules: ['trigger', 'extract', 'analyze', 'validate', 'route', 'output'],
-    },
-    {
-      id: 'document-intake',
-      name: 'Client Document Intake',
-      description: 'Process and organize incoming client documents with AI classification',
-      category: 'Document Processing',
-      steps: 4,
-      modules: ['trigger', 'extract', 'analyze', 'output'],
-    },
-    {
-      id: 'r-and-d-credit',
-      name: 'R&D Tax Credit Analysis',
-      description: 'Identify eligible R&D activities and calculate available tax credits',
-      category: 'Tax Compliance',
-      steps: 6,
-      modules: ['trigger', 'extract', 'analyze', 'validate', 'route', 'output'],
-    },
-    {
-      id: 'state-nexus',
-      name: 'State Nexus Assessment',
-      description: 'Evaluate multi-state business activities for tax nexus obligations',
-      category: 'Tax Compliance',
-      steps: 5,
-      modules: ['trigger', 'extract', 'analyze', 'validate', 'output'],
-    },
-  ];
+
 
   const workflows = [
     {
       id: 1,
       name: 'IRS CP2000 Response Builder',
       description: 'Process CP2000 notices, reconcile income, draft response',
-      steps: 6,
+      steps: 5,
       accuracy: '96%',
       avgTime: '45 min',
       avgTimeMinutes: 45,
       trigger: 'Inbound CP2000 PDF',
       lastRun: '2 hours ago',
     },
-    {
-      id: 2,
-      name: '1099-K Threshold Change Client Audit',
-      description: 'Audit clients impacted by 1099-K threshold changes',
-      steps: 5,
-      accuracy: '94%',
-      avgTime: '38 min',
-      avgTimeMinutes: 38,
-      trigger: 'Scheduled weekly',
-      lastRun: '1 week ago',
-    },
-    {
-      id: 3,
-      name: 'ERC Claim Validation Workflow',
-      description: 'Validate ERC eligibility and generate filings',
-      steps: 6,
-      accuracy: '98%',
-      avgTime: '52 min',
-      avgTimeMinutes: 52,
-      trigger: 'Manual run',
-      lastRun: 'Yesterday',
-    },
-    {
-      id: 4,
-      name: 'FinCEN Beneficial Ownership Filing',
-      description: 'Collect ownership documents and prepare filings',
-      steps: 5,
-      accuracy: '97%',
-      avgTime: '28 min',
-      avgTimeMinutes: 28,
-      trigger: 'Case intake',
-      lastRun: '3 days ago',
-    },
   ];
 
   const metrics = [
-    { label: 'Active Workflows', value: '12', change: '+3', trend: 'up' },
+    { label: 'Active Workflows', value: '1', change: '', trend: 'neutral' },
     { label: 'Total Triggers', value: '87', change: '+12', trend: 'up' },
     { label: 'Completion Rate', value: '96%', change: '+2%', trend: 'up' },
-    { label: 'Avg. Cycle Time', value: '42 min', change: '-8 min', trend: 'up' },
+    { label: 'Avg. Cycle Time', value: '45 min', change: '-3 min', trend: 'up' },
   ];
 
-  const categories = ['All', ...new Set(workflowTemplates.map((t) => t.category))];
+
 
   const getTimeCategory = (minutes) => {
     if (minutes <= 30) return { label: 'Fast', color: 'bg-green-100 text-green-700', icon: '⚡' };
@@ -196,14 +98,6 @@ const WorkflowOrchestrator = () => {
           agent: 'Intake Service',
           detail: 'Parsing PDF, extracting notice fields, tagging client',
           duration: '2 min',
-        },
-        {
-          id: 's2',
-          name: 'Extract Data',
-          description: 'OCR and structured extraction of notice data',
-          agent: 'OCR Worker',
-          detail: 'Running document intelligence and normalizing fields',
-          duration: '8 min',
         },
         {
           id: 's3',
@@ -240,182 +134,13 @@ const WorkflowOrchestrator = () => {
           duration: '7 min',
         },
       ],
-      2: [
-        {
-          id: 's1',
-          name: 'Trigger: Weekly audit',
-          description: 'Pull clients impacted by 1099-K thresholds',
-          agent: 'Scheduler',
-          detail: 'Fetching merchant data and thresholds',
-          duration: '4 min',
-        },
-        {
-          id: 's2',
-          name: 'Extract Data',
-          description: 'Ingest payment processor exports',
-          agent: 'Data Intake',
-          detail: 'Standardizing transaction data',
-          duration: '10 min',
-        },
-        {
-          id: 's3',
-          name: 'AI Analysis',
-          description: 'Detect anomalies and threshold crossings',
-          agent: 'Risk Model',
-          detail: 'Flagging unusual volumes and mismatches',
-          duration: '12 min',
-        },
-        {
-          id: 's4',
-          name: 'Validate',
-          description: 'Apply audit rules and thresholds',
-          agent: 'Rules Engine',
-          detail: 'Checking variance vs. prior periods',
-          duration: '6 min',
-        },
-        {
-          id: 's5',
-          name: 'Output',
-          description: 'Generate outreach and audit packet',
-          agent: 'Export Service',
-          detail: 'Drafting client outreach material',
-          duration: '6 min',
-        },
-      ],
-      3: [
-        {
-          id: 's1',
-          name: 'Trigger: Manual run',
-          description: 'Start ERC validation for selected client',
-          agent: 'User Trigger',
-          detail: 'Collecting inputs and prior filings',
-          duration: '3 min',
-        },
-        {
-          id: 's2',
-          name: 'Extract Data',
-          description: 'Parse payroll and revenue data',
-          agent: 'Data Pipeline',
-          detail: 'Standardizing payroll CSVs',
-          duration: '11 min',
-        },
-        {
-          id: 's3',
-          name: 'AI Analysis',
-          description: 'Eligibility and credit computation',
-          agent: 'Credit Engine',
-          detail: 'LLM explanation plus formula-based calc',
-          duration: '14 min',
-        },
-        {
-          id: 's4',
-          name: 'Validate',
-          description: 'Apply IRS guidance and thresholds',
-          agent: 'Rules Engine',
-          detail: 'Cross-checking revenue drops and shutdown periods',
-          duration: '10 min',
-        },
-        {
-          id: 's5',
-          name: 'Route/Assign',
-          description: 'Send to reviewer and client portal',
-          agent: 'Assignment Service',
-          detail: 'Notify reviewer, stage client tasks',
-          duration: '7 min',
-          color: 'bg-indigo-600',
-          icon: Users,
-        },
-        {
-          id: 's6',
-          name: 'Output',
-          description: 'Generate 941-X and memo',
-          agent: 'Export Service',
-          detail: 'Export filings and research memo',
-          duration: '8 min',
-        },
-      ],
-      4: [
-        {
-          id: 's1',
-          name: 'Trigger: Case intake',
-          description: 'New BOI case created',
-          agent: 'Intake Service',
-          detail: 'Collecting org and owners',
-          duration: '3 min',
-        },
-        {
-          id: 's2',
-          name: 'Extract Data',
-          description: 'Parse identity and ownership docs',
-          agent: 'Document Intelligence',
-          detail: 'Scanning IDs and ownership forms',
-          duration: '10 min',
-        },
-        {
-          id: 's3',
-          name: 'AI Analysis',
-          description: 'BOI eligibility and gaps',
-          agent: 'Compliance Model',
-          detail: 'Flagging missing beneficial ownership info',
-          duration: '12 min',
-        },
-        {
-          id: 's4',
-          name: 'Validate',
-          description: 'Jurisdictional validation',
-          agent: 'Rules Engine',
-          detail: 'Applying state/FinCEN rules',
-          duration: '7 min',
-        },
-        {
-          id: 's5',
-          name: 'Output',
-          description: 'Generate BOI filing packet',
-          agent: 'Export Service',
-          detail: 'Drafting filing and summary',
-          duration: '6 min',
-        },
-      ],
     };
-    return stepsByWorkflow[workflowId] || stepsByWorkflow[1];
+    return stepsByWorkflow[workflowId] || [];
   };
 
-  const filteredTemplates = workflowTemplates.filter((template) => {
-    const matchesSearch =
-      template.name.toLowerCase().includes(templateSearchQuery.toLowerCase()) ||
-      template.description.toLowerCase().includes(templateSearchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || template.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
 
-  const handleUseTemplate = (template) => {
-    const spacing = 200;
-    const startY = 150;
-    const newModules = template.modules.map((moduleId, index) => {
-      const moduleType = availableModules.find((m) => m.id === moduleId);
-      const newId = `${moduleId}-${Date.now()}-${index}`;
-      return {
-        ...moduleType,
-        id: newId,
-        x: 400,
-        y: startY + index * spacing,
-      };
-    });
-    setCanvasModules(newModules);
 
-    // Auto-connect template modules
-    const newConnections = [];
-    for (let i = 0; i < newModules.length - 1; i++) {
-      newConnections.push({
-        from: newModules[i].id,
-        to: newModules[i + 1].id,
-      });
-    }
-    setConnections(newConnections);
 
-    setShowTemplateModal(false);
-    setShowTemplatesLibrary(false);
-  };
 
   const handleExportReport = () => {
     setIsExporting(true);
@@ -561,8 +286,10 @@ const WorkflowOrchestrator = () => {
   };
 
   const handleDragStart = (e, module) => {
-    setDraggedModule(module);
+    // START: Refactored to use dataTransfer
+    e.dataTransfer.setData('application/react-dnd-id', module.id);
     e.dataTransfer.effectAllowed = 'copy';
+    // END: Refactored to use dataTransfer
   };
 
   const handleDragOver = (e) => {
@@ -572,14 +299,19 @@ const WorkflowOrchestrator = () => {
 
   const handleDrop = (e) => {
     e.preventDefault();
-    if (draggedModule) {
+    // START: Refactored to use dataTransfer
+    const moduleId = e.dataTransfer.getData('application/react-dnd-id');
+    if (moduleId) {
+      const moduleType = availableModules.find((m) => m.id === moduleId);
+      if (!moduleType) return;
+
       const rect = e.currentTarget.getBoundingClientRect();
       const x = (e.clientX - rect.left - pan.x) / zoom;
       const y = (e.clientY - rect.top - pan.y) / zoom;
 
       const newModule = {
-        ...draggedModule,
-        id: `${draggedModule.id}-${Date.now()}`,
+        ...moduleType,
+        id: `${moduleId}-${Date.now()}`,
         x,
         y,
       };
@@ -598,9 +330,8 @@ const WorkflowOrchestrator = () => {
 
         return updatedModules;
       });
-
-      setDraggedModule(null);
     }
+    // END: Refactored to use dataTransfer
   };
 
   const handleCanvasModuleMouseDown = (e, moduleId) => {
@@ -608,6 +339,7 @@ const WorkflowOrchestrator = () => {
     const module = canvasModules.find((m) => m.id === moduleId);
     if (!module) return;
     const rect = e.currentTarget.closest('.canvas-area').getBoundingClientRect();
+    setDraggingCanvasModule(moduleId); // START: Added missing state update
     setDragOffset({
       x: (e.clientX - rect.left - pan.x) / zoom - module.x,
       y: (e.clientY - rect.top - pan.y) / zoom - module.y,
@@ -819,6 +551,7 @@ const WorkflowOrchestrator = () => {
                 onMouseMove={handleCanvasMouseMove}
                 onMouseUp={handleCanvasMouseUp}
                 onMouseLeave={handleCanvasMouseUp}
+                onClick={() => setActiveDropdownModuleId(null)}
                 onWheel={handleWheel}
                 style={{
                   backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
@@ -894,13 +627,23 @@ const WorkflowOrchestrator = () => {
                   {canvasModules.map((module) => {
                     const Icon = module.icon;
                     const isDragging = draggingCanvasModule === module.id;
+                    const isDropdownOpen = activeDropdownModuleId === module.id;
+
                     return (
                       <div
                         key={module.id}
-                        className={`absolute ${module.color} text-white rounded-lg shadow-lg group transition-shadow ${isDragging ? 'cursor-grabbing shadow-2xl z-50' : 'cursor-grab'
+                        className={`absolute ${module.color} text-white rounded-lg shadow-lg group transition-shadow ${isDragging ? 'cursor-grabbing shadow-2xl z-50' : 'cursor-pointer hover:shadow-xl z-10'
                           }`}
                         style={{ left: `${module.x - 80}px`, top: `${module.y - 40}px`, width: '160px', height: '80px', userSelect: 'none', touchAction: 'none' }}
                         onMouseDown={(e) => handleCanvasModuleMouseDown(e, module.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Prevent opening if we just finished dragging (simple heuristic could be checking if isDragging was true, but React updates might make that tricky. 
+                          // For now, let's assume click is fine. If dragging happened, usually pointer events might be captured differently, but let's test.)
+                          if (!draggingCanvasModule) {
+                            setActiveDropdownModuleId(isDropdownOpen ? null : module.id);
+                          }
+                        }}
                       >
                         <div className="p-3 h-full flex flex-col justify-center items-center relative">
                           <button
@@ -915,6 +658,25 @@ const WorkflowOrchestrator = () => {
                           </button>
                           <Icon size={24} className="mb-1 pointer-events-none" />
                           <div className="font-semibold text-sm text-center pointer-events-none">{module.name}</div>
+
+                          {/* Dropdown Menu */}
+                          {isDropdownOpen && (
+                            <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                              <button
+                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log('Configure clicked for', module.name);
+                                  setActiveDropdownModuleId(null);
+                                  setConfiguringModule(module);
+                                  setConfigFormData(module.config || {});
+                                  setConfigStep(1);
+                                }}
+                              >
+                                Configure
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -927,7 +689,7 @@ const WorkflowOrchestrator = () => {
                 <div className="flex items-start gap-2 text-sm text-blue-900">
                   <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
                   <div>
-                    <strong>Quick Start:</strong> Drag a <strong>Trigger</strong> module to start, then add <strong>Extract Data</strong>, <strong>AI Analysis</strong>, <strong>Validate</strong>, and finish with <strong>Output</strong>. Modules will auto-connect in sequence.
+                    <strong>Quick Start:</strong> Drag a <strong>Trigger</strong> module to start, then add <strong>AI Analysis</strong>, <strong>Validate</strong>, and finish with <strong>Output</strong>. Modules will auto-connect in sequence.
                   </div>
                 </div>
               </div>
@@ -1198,9 +960,6 @@ const WorkflowOrchestrator = () => {
                 <div className="space-y-3">
                   {[
                     { name: 'IRS CP2000 Response Builder', time: '2 hours ago', status: 'success', duration: '47 min' },
-                    { name: '1099-K Threshold Change Client Audit', time: '5 hours ago', status: 'success', duration: '38 min' },
-                    { name: 'ERC Claim Validation Workflow', time: 'Yesterday', status: 'success', duration: '52 min' },
-                    { name: 'FinCEN Beneficial Ownership Filing', time: '2 days ago', status: 'success', duration: '28 min' },
                   ].map((activity, idx) => (
                     <div key={idx} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                       <div className="flex items-center gap-3">
@@ -1223,135 +982,422 @@ const WorkflowOrchestrator = () => {
         </div>
 
         <div className="w-80 bg-white border-l overflow-y-auto p-4">
-          {!showTemplatesLibrary ? (
-            <>
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
-                <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                  <Zap size={18} />
-                  Quick Actions
-                </h3>
-                <div className="space-y-2">
-                  <button onClick={() => setShowTemplateModal(true)} className="w-full text-left px-3 py-2 bg-white rounded border hover:bg-purple-50 text-sm">
-                    Create from Template
-                  </button>
-                  <button onClick={() => setShowTemplatesLibrary(true)} className="w-full text-left px-3 py-2 bg-white rounded border hover:bg-purple-50 text-sm">
-                    View All Templates
-                  </button>
-                  <button
-                    onClick={handleExportReport}
-                    disabled={isExporting}
-                    className="w-full text-left px-3 py-2 bg-white rounded border hover:bg-purple-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isExporting ? 'Generating Report...' : 'Export Metrics Report'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <h3 className="font-semibold text-green-900 mb-2">Pro Tip</h3>
-                <p className="text-sm text-gray-700">
-                  Use the workflow builder to chain multiple processes together. For example, connect "Document Extract" → "AI Analysis" → "Compliance Check" to create end-to-end automation that saves hours of manual review time.
-                </p>
-              </div>
-            </>
-          ) : (
-            <div>
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+            <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+              <Zap size={18} />
+              Quick Actions
+            </h3>
+            <div className="space-y-2">
               <button
-                onClick={() => {
-                  setShowTemplatesLibrary(false);
-                  setTemplateSearchQuery('');
-                  setSelectedCategory('All');
-                }}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4 text-sm font-medium"
+                onClick={handleExportReport}
+                disabled={isExporting}
+                className="w-full text-left px-3 py-2 bg-white rounded border hover:bg-purple-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Back to Quick Actions
+                {isExporting ? 'Generating Report...' : 'Export Metrics Report'}
               </button>
-
-              <h3 className="text-lg font-bold text-gray-800 mb-4">Templates Library</h3>
-
-              <input
-                type="text"
-                placeholder="Search templates..."
-                value={templateSearchQuery}
-                onChange={(e) => setTemplateSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg mb-4 text-sm"
-              />
-
-              <div className="flex flex-wrap gap-2 mb-4">
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => setSelectedCategory(category)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === category ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-
-              <div className="space-y-3">
-                {filteredTemplates.map((template) => (
-                  <div key={template.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-800 text-sm mb-1">{template.name}</h4>
-                        <p className="text-xs text-gray-600 mb-2">{template.description}</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">{template.category}</span>
-                          <span className="text-xs text-gray-500">{template.steps} steps</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleUseTemplate(template)}
-                      className="w-full mt-2 px-3 py-1.5 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600"
-                    >
-                      Use Template
-                    </button>
-                  </div>
-                ))}
-              </div>
             </div>
-          )}
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h3 className="font-semibold text-green-900 mb-2">Pro Tip</h3>
+            <p className="text-sm text-gray-700">
+              Use the workflow builder to chain multiple processes together. For example, connect "Trigger" → "AI Analysis" → "Validate" → "Route/Assign" to create end-to-end automation that saves hours of manual review time.
+            </p>
+          </div>
         </div>
       </div>
 
+
       {
-        showTemplateModal && (
+        configuringModule && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl">
-              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-800">Choose a Workflow Template</h2>
-                <button onClick={() => setShowTemplateModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">
+            <div className="bg-white rounded-lg max-w-lg w-full shadow-2xl">
+              <div className="border-b px-6 py-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Configure {configuringModule.name}
+                  {configuringModule.name === 'Trigger' && <span className="text-sm font-normal text-gray-500 ml-2">(Step {configStep} of 2)</span>}
+                </h2>
+                <button onClick={() => setConfiguringModule(null)} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">
                   ×
                 </button>
               </div>
 
-              <div className="p-6 space-y-4">
-                {workflowTemplates.slice(0, 4).map((template) => (
-                  <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="font-bold text-gray-800 mb-1">{template.name}</h3>
-                        <p className="text-sm text-gray-600">{template.description}</p>
+              <div className="p-6">
+                {configuringModule.name === 'Trigger' ? (
+                  <>
+                    {/* Step 1: Mode Selection */}
+                    {configStep === 1 && (
+                      <div className="space-y-3">
+                        <p className="font-medium text-gray-700 mb-2">Select Trigger Mode:</p>
+                        {['Topic Match', 'Jurisdiction Detection', 'Cross-Reference Detection'].map((option) => (
+                          <label key={option} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                            <input
+                              type="radio"
+                              name="triggerMode"
+                              value={option}
+                              checked={configFormData.triggerMode === option}
+                              onChange={(e) => setConfigFormData({ ...configFormData, triggerMode: e.target.value })}
+                              className="w-4 h-4 text-blue-600"
+                            />
+                            <span className="text-gray-800">{option}</span>
+                          </label>
+                        ))}
                       </div>
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded ml-3 flex-shrink-0">{template.steps} steps</span>
+                    )}
+
+                    {/* Step 2: Details */}
+                    {configStep === 2 && (
+                      <div className="space-y-6">
+                        {configFormData.triggerMode === 'Topic Match' && (
+                          <>
+                            <div>
+                              <p className="font-medium text-gray-700 mb-2">Monitored Topics / Codes:</p>
+                              <div className="space-y-2 ml-1">
+                                {['§48', 'ERC', '1099-K'].map((item) => (
+                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={configFormData.topics?.[item] || false}
+                                      onChange={(e) => setConfigFormData({
+                                        ...configFormData,
+                                        topics: { ...configFormData.topics, [item]: e.target.checked }
+                                      })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>{item}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-700 mb-2">Content Source:</p>
+                              <div className="space-y-2 ml-1">
+                                {['IRS', 'State Authorities'].map((item) => (
+                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={configFormData.sources?.[item] || false}
+                                      onChange={(e) => setConfigFormData({
+                                        ...configFormData,
+                                        sources: { ...configFormData.sources, [item]: e.target.checked }
+                                      })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>{item}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {configFormData.triggerMode === 'Jurisdiction Detection' && (
+                          <>
+                            <div>
+                              <p className="font-medium text-gray-700 mb-2">Jurisdictions:</p>
+                              <div className="space-y-2 ml-1">
+                                {['California', 'New York'].map((item) => (
+                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={configFormData.jurisdictions?.[item] || false}
+                                      onChange={(e) => setConfigFormData({
+                                        ...configFormData,
+                                        jurisdictions: { ...configFormData.jurisdictions, [item]: e.target.checked }
+                                      })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>{item}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-700 mb-2">Authority Sources:</p>
+                              <div className="space-y-2 ml-1">
+                                {['CDTFA', 'State DOR'].map((item) => (
+                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={configFormData.authorities?.[item] || false}
+                                      onChange={(e) => setConfigFormData({
+                                        ...configFormData,
+                                        authorities: { ...configFormData.authorities, [item]: e.target.checked }
+                                      })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>{item}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {configFormData.triggerMode === 'Cross-Reference Detection' && (
+                          <>
+                            <div>
+                              <p className="font-medium text-gray-700 mb-2">Primary Authority Type:</p>
+                              <div className="space-y-2 ml-1">
+                                {['IRS Notice'].map((item) => (
+                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={configFormData.primaryAuth?.[item] || false}
+                                      onChange={(e) => setConfigFormData({
+                                        ...configFormData,
+                                        primaryAuth: { ...configFormData.primaryAuth, [item]: e.target.checked }
+                                      })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>{item}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-700 mb-2">Referenced Authority Types:</p>
+                              <div className="space-y-2 ml-1">
+                                {['Rev. Proc.', 'IRC Section'].map((item) => (
+                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={configFormData.referencedAuth?.[item] || false}
+                                      onChange={(e) => setConfigFormData({
+                                        ...configFormData,
+                                        referencedAuth: { ...configFormData.referencedAuth, [item]: e.target.checked }
+                                      })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>{item}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : configuringModule.name === 'AI Analysis' ? (
+                  <div className="space-y-6">
+                    {/* Analysis Type */}
+                    <div>
+                      <p className="font-medium text-gray-700 mb-2">Analysis Type:</p>
+                      <select
+                        value={configFormData.analysisType || 'Client Impact Analysis'}
+                        onChange={(e) => setConfigFormData({ ...configFormData, analysisType: e.target.value })}
+                        className="w-full p-2 border border-gray-300 rounded-lg bg-white"
+                      >
+                        <option>Client Impact Analysis</option>
+                        <option>Regulatory Change Analysis</option>
+                        <option>Risk Assessment</option>
+                      </select>
                     </div>
-                    <button
-                      onClick={() => handleUseTemplate(template)}
-                      className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
-                    >
-                      Use Template
-                    </button>
+
+
                   </div>
-                ))}
+                ) : configuringModule.name === 'Validate' ? (
+                  <div className="space-y-6">
+                    <h3 className="font-bold text-gray-800 border-b pb-2">Validation Rules</h3>
+
+                    {/* Citation Check */}
+                    <div>
+                      <p className="font-medium text-gray-700 mb-2">Citation Check:</p>
+                      <label className="flex items-center gap-2 cursor-pointer ml-1">
+                        <input
+                          type="checkbox"
+                          checked={configFormData.citationCheck || false}
+                          onChange={(e) => setConfigFormData({ ...configFormData, citationCheck: e.target.checked })}
+                          className="rounded text-blue-600"
+                        />
+                        <span className="text-gray-700">All conclusions must be supported by authorities</span>
+                      </label>
+                    </div>
+
+                    {/* Recency Check */}
+                    <div>
+                      <p className="font-medium text-gray-700 mb-2">Recency Check:</p>
+                      <label className="flex items-center gap-2 cursor-pointer ml-1">
+                        <input
+                          type="checkbox"
+                          checked={configFormData.recencyCheck || false}
+                          onChange={(e) => setConfigFormData({ ...configFormData, recencyCheck: e.target.checked })}
+                          className="rounded text-blue-600"
+                        />
+                        <span className="text-gray-700">Flag outdated or superseded guidance</span>
+                      </label>
+                    </div>
+
+                    {/* Completeness Rules */}
+                    <div>
+                      <p className="font-medium text-gray-700 mb-2">Completeness Rules:</p>
+                      <div className="space-y-2 ml-1">
+                        {['Effective date identified', 'Applicability section included'].map((item) => (
+                          <label key={item} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={configFormData.completeness?.[item] || false}
+                              onChange={(e) => setConfigFormData({
+                                ...configFormData,
+                                completeness: { ...configFormData.completeness, [item]: e.target.checked }
+                              })}
+                              className="rounded text-blue-600"
+                            />
+                            <span className="text-gray-700">{item}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : configuringModule.name === 'Route/Assign' ? (
+                  <div className="space-y-6">
+                    <h3 className="font-bold text-gray-800 border-b pb-2">Assignment Logic</h3>
+
+                    {/* Primary Reviewer */}
+                    <div>
+                      <p className="font-medium text-gray-700 mb-2">Primary Reviewer:</p>
+                      <input
+                        type="email"
+                        placeholder="Enter email address"
+                        value={configFormData.primaryReviewer || ''}
+                        onChange={(e) => setConfigFormData({ ...configFormData, primaryReviewer: e.target.value })}
+                        className="w-full p-2 border border-gray-300 rounded-lg bg-white"
+                      />
+                    </div>
+                  </div>
+                ) : configuringModule.name === 'Output' ? (
+                  <div className="space-y-6">
+                    {/* Step 1: Format & Destination */}
+                    {configStep === 1 && (
+                      <>
+                        {/* Format */}
+                        <div>
+                          <p className="font-medium text-gray-700 mb-2">Format:</p>
+                          <div className="space-y-2 ml-1">
+                            {['PDF', 'HTML'].map((item) => (
+                              <label key={item} className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={configFormData.format?.[item] || false}
+                                  onChange={(e) => setConfigFormData({
+                                    ...configFormData,
+                                    format: { ...configFormData.format, [item]: e.target.checked }
+                                  })}
+                                  className="rounded text-blue-600"
+                                />
+                                <span className="text-gray-700">{item}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Destination */}
+                        <div>
+                          <p className="font-medium text-gray-700 mb-2">Destination:</p>
+                          <select
+                            value={configFormData.destination || 'Local'}
+                            onChange={(e) => setConfigFormData({ ...configFormData, destination: e.target.value })}
+                            className="w-full p-2 border border-gray-300 rounded-lg bg-white"
+                          >
+                            <option value="Local">Local</option>
+                            <option value="Email">Email</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Step 2: Details */}
+                    {configStep === 2 && (
+                      <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                        {configFormData.destination === 'Local' ? (
+                          <div>
+                            <p className="font-medium text-gray-700 mb-2">Local Options:</p>
+                            <label className="flex items-center gap-2 cursor-pointer ml-1">
+                              <input
+                                type="checkbox"
+                                checked={configFormData.downloadEnabled || false}
+                                onChange={(e) => setConfigFormData({ ...configFormData, downloadEnabled: e.target.checked })}
+                                className="rounded text-blue-600"
+                              />
+                              <span className="text-gray-700">Download</span>
+                            </label>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="font-medium text-gray-700 mb-2">Email Recipient:</p>
+                            <input
+                              type="email"
+                              placeholder="recipient@example.com"
+                              value={configFormData.emailRecipient || ''}
+                              onChange={(e) => setConfigFormData({ ...configFormData, emailRecipient: e.target.value })}
+                              className="w-full p-2 border border-gray-300 rounded-lg bg-white"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Report will be sent automatically upon completion.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Settings size={48} className="mx-auto mb-3 opacity-20" />
+                    <p>No configuration options available for this module type.</p>
+                  </div>
+                )}
               </div>
 
-              <div className="border-t px-6 py-4 bg-gray-50">
-                <button onClick={() => setShowTemplateModal(false)} className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">
+              <div className="border-t px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                <button
+                  onClick={() => setConfiguringModule(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 font-medium"
+                >
                   Cancel
                 </button>
+
+                {/* Back Button (Step 2) */}
+                {(configuringModule.name === 'Trigger' || configuringModule.name === 'Output') && configStep === 2 && (
+                  <button
+                    onClick={() => setConfigStep(1)}
+                    className="px-4 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-medium"
+                  >
+                    Back
+                  </button>
+                )}
+
+                {/* Next/Save Button */}
+                {(configuringModule.name === 'Trigger' && configStep === 1) || (configuringModule.name === 'Output' && configStep === 1) ? (
+                  <button
+                    onClick={() => {
+                      if (configuringModule.name === 'Trigger') {
+                        if (configFormData.triggerMode) {
+                          setConfigStep(2);
+                        } else {
+                          alert('Please select a trigger mode');
+                        }
+                      } else if (configuringModule.name === 'Output') {
+                        // Default to Local if nothing selected yet
+                        if (!configFormData.destination) {
+                          setConfigFormData(prev => ({ ...prev, destination: 'Local' }));
+                        }
+                        setConfigStep(2);
+                      }
+                    }}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setCanvasModules((prev) => prev.map((m) => m.id === configuringModule.id ? { ...m, config: configFormData } : m));
+                      setConfiguringModule(null);
+                    }}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+                  >
+                    Save Configuration
+                  </button>
+                )}
               </div>
             </div>
           </div>
