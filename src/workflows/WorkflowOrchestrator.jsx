@@ -35,7 +35,11 @@ const WorkflowOrchestrator = () => {
   const [configuringModule, setConfiguringModule] = useState(null);
   const [configFormData, setConfigFormData] = useState({});
   const [configStep, setConfigStep] = useState(1);
-
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState('');
+  const [newWorkflowDescription, setNewWorkflowDescription] = useState('');
+  const [reportContent, setReportContent] = useState(null);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const [isExporting, setIsExporting] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -59,7 +63,7 @@ const WorkflowOrchestrator = () => {
 
 
 
-  const workflows = [
+  const [workflows, setWorkflows] = useState([
     {
       id: 1,
       name: 'IRS CP2000 Response Builder',
@@ -71,7 +75,31 @@ const WorkflowOrchestrator = () => {
       trigger: 'Inbound CP2000 PDF',
       lastRun: '2 hours ago',
     },
-  ];
+  ]);
+
+  const handleSaveWorkflow = () => {
+    if (!newWorkflowName.trim()) return;
+
+    const newWorkflow = {
+      id: Math.max(...workflows.map(w => w.id), 0) + 1,
+      name: newWorkflowName,
+      description: newWorkflowDescription || 'Custom workflow created by user',
+      steps: canvasModules.length,
+      accuracy: 'N/A',
+      avgTime: 'N/A',
+      avgTimeMinutes: 0,
+      trigger: canvasModules.find(m => m.name === 'Trigger') ? 'Manual' : 'Manual',
+      lastRun: 'Never',
+      modules: canvasModules,
+      connections: connections,
+    };
+
+    setWorkflows([...workflows, newWorkflow]);
+    setNewWorkflowName('');
+    setNewWorkflowDescription('');
+    setShowSaveModal(false);
+    setActiveWorkflow(newWorkflow);
+  };
 
   const metrics = [
     { label: 'Active Workflows', value: '1', change: '', trend: 'neutral' },
@@ -135,7 +163,24 @@ const WorkflowOrchestrator = () => {
         },
       ],
     };
-    return stepsByWorkflow[workflowId] || [];
+
+    if (stepsByWorkflow[workflowId]) {
+      return stepsByWorkflow[workflowId];
+    }
+
+    // Dynamic steps for custom workflows
+    if (activeWorkflow && activeWorkflow.id === workflowId && activeWorkflow.modules) {
+      return activeWorkflow.modules.map((mod, idx) => ({
+        id: `custom-step-${idx}`,
+        name: mod.name,
+        description: `Execute ${mod.name} logic`,
+        agent: `${mod.name} Agent`,
+        detail: `Processing ${mod.name} configuration...`,
+        duration: '5 min', // Default placeholder
+      }));
+    }
+
+    return [];
   };
 
 
@@ -368,24 +413,167 @@ const WorkflowOrchestrator = () => {
     setConnections([]);
   };
 
-  const handleRunWorkflow = () => {
+  const executeModule = async (module, context) => {
+    // Simulate processing delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    const config = module.config || {};
+    let output = {};
+    let logEntry = {
+      step: module.name,
+      timestamp: new Date().toLocaleTimeString(),
+      details: ''
+    };
+
+    switch (module.name) {
+      case 'Trigger':
+        const topics = config.topics ? Object.keys(config.topics).filter(k => config.topics[k]) : [];
+        const primaryTopic = topics[0] || 'General';
+        output = {
+          sourceDocument: 'IRS_Notice_CP2000.pdf',
+          detectedTopics: topics.length > 0 ? topics : ['General (Default)'],
+          primaryTopic: primaryTopic,
+          triggerSource: 'Manual Upload'
+        };
+        logEntry.details = `Detected ${output.sourceDocument}.\nIdentified Research Topic: **${primaryTopic}**.\nMatched codes: ${output.detectedTopics.join(', ')}.`;
+        break;
+
+      case 'AI Analysis':
+        const analysisType = config.analysisType || 'Standard Analysis';
+        const topic = context.primaryTopic || 'General';
+
+        // Dynamic Content Generation based on Topic + Analysis Type
+        let analysisContent = '';
+        if (topic.includes('ERC')) {
+          if (analysisType.includes('Risk')) {
+            analysisContent = "Audit Risk Assessment for Employee Retention Credit (ERC):\n- **High Risk**: Claims filed during moratorium period.\n- **Verification**: Cross-referenced with payroll deposits.\n- **Warning**: Reviewing for 'Supply Chain Disruption' substantiation.";
+          } else {
+            analysisContent = "ERC Client Impact Analysis:\n- Impact: Client may need to utilize the Voluntary Disclosure Program.\n- Financials: Refund amount of $142,000 flagged for review.\n- Action: Prepare substantiation docs for Q2 2021.";
+          }
+        } else if (topic.includes('48')) {
+          analysisContent = "Investment Credit (IRC §48) Findings:\n- **Base Rate**: Project qualifies for base 6% credit.\n- **Bonus Criteria**: Prevailing Wage & Apprenticeship requirements met.\n- **Domestic Content**: Preliminary materials review pending.";
+        } else if (topic.includes('1099')) {
+          analysisContent = "1099-K Payment Card Analysis:\n- **Threshold**: Transactions exceed $600 reporting limit.\n- **Reconciliation**: Discrepancy found between 1099-K gross amount and Schedule C reported income.\n- **State Rules**: State-specific backup withholding rules apply.";
+        } else {
+          analysisContent = `Standard Analysis for ${topic}:\n- Document classified and text extracted.\n- Key obligations identified.\n- Timelines established for response.`;
+        }
+
+        output = {
+          analysisResult: analysisContent,
+          keyFindings: ['Key finding 1', 'Key finding 2'],
+          confidenceScore: 0.98
+        };
+        logEntry.details = `**${analysisType}** completed for **${topic}**.\n\n${analysisContent}\n\nConfidence: ${(output.confidenceScore * 100)}%.`;
+        break;
+
+      case 'Validate':
+        const validationResults = [];
+        const vTopic = context.primaryTopic || 'General';
+        if (config.citationCheck) {
+          if (vTopic.includes('ERC')) validationResults.push("Verified against Notice 2021-49 and IRS Moratorium guidelines.");
+          else if (vTopic.includes('48')) validationResults.push("Verified against IRC §48 and Inflation Reduction Act guidance.");
+          else validationResults.push("Verified citations against current IRC statutes.");
+        }
+        if (config.recencyCheck) validationResults.push('Confirmed guidance is current as of Dec 2025.');
+        if (config.completeness) validationResults.push('Completeness check passed: All required schedules present.');
+
+        output = {
+          validationStatus: 'Passed',
+          validationDetails: validationResults
+        };
+        logEntry.details = `Validation Status: **${output.validationStatus}**.\nChecks Performed:\n${validationResults.map(r => `- ${r}`).join('\n') || '- No specific rules enabled'}`;
+        break;
+
+      case 'Route/Assign':
+        const assignee = config.primaryReviewer || 'Unassigned';
+        output = {
+          assignedTo: assignee,
+          status: 'Pending Review'
+        };
+        logEntry.details = `Routed to **${assignee}** for expert review.`;
+        break;
+
+      case 'Output':
+        const destination = config.destination || 'Local';
+        const format = config.format ? Object.keys(config.format).filter(k => config.format[k]).join(', ') : 'PDF';
+        output = {
+          reportFormat: format,
+          deliveryDestination: destination
+        };
+        logEntry.details = `Generated **${format} Research Report**.\nDestination: ${destination}.`;
+        break;
+
+      default:
+        output = { status: 'Skipped' };
+        logEntry.details = 'No execution logic defined for this module.';
+    }
+
+    return { output, logEntry };
+  };
+
+  const generateReportFromExecution = (workflow, executionLogs, finalContext) => {
+    const topic = finalContext.primaryTopic || 'Workflow';
+    return {
+      title: `${topic} Research Report: ${workflow.name}`,
+      date: new Date().toLocaleString(),
+      sections: executionLogs.map(log => ({
+        title: log.step,
+        content: log.details
+      }))
+    };
+  };
+
+  const handleRunWorkflow = async () => {
     if (!activeWorkflow) return;
     setWorkflowRunning(true);
     setCurrentStep(0);
     setCompletedSteps([]);
-    const steps = getWorkflowSteps(activeWorkflow.id);
-    const interval = setInterval(() => {
-      setCurrentStep((prev) => {
-        if (prev < steps.length - 1) {
+    setReportContent(null);
+
+    const modulesToExecute = activeWorkflow.modules || [];
+    let context = {};
+    let executionLogs = [];
+
+    if (!modulesToExecute.length) {
+      const steps = getWorkflowSteps(activeWorkflow.id);
+      const interval = setInterval(() => {
+        setCurrentStep((prev) => {
+          if (prev < steps.length - 1) {
+            setCompletedSteps((completed) => [...completed, prev]);
+            return prev + 1;
+          }
+          clearInterval(interval);
+          setWorkflowRunning(false);
           setCompletedSteps((completed) => [...completed, prev]);
-          return prev + 1;
-        }
-        clearInterval(interval);
-        setWorkflowRunning(false);
-        setCompletedSteps((completed) => [...completed, prev]);
-        return prev;
-      });
-    }, 2000);
+          setReportContent({
+            title: 'Legacy Workflow Report',
+            date: new Date().toLocaleString(),
+            sections: [{ title: 'Completed', content: 'Legacy workflow completed successfully.' }]
+          });
+          return prev;
+        });
+      }, 1500);
+      return;
+    }
+
+    // Execute modules sequentially
+    for (let i = 0; i < modulesToExecute.length; i++) {
+      setCurrentStep(i);
+      const module = modulesToExecute[i];
+
+      try {
+        const result = await executeModule(module, context);
+        context = { ...context, ...result.output };
+        executionLogs.push(result.logEntry);
+        setCompletedSteps(prev => [...prev, i]);
+      } catch (error) {
+        console.error("Execution error", error);
+      }
+    }
+
+    setWorkflowRunning(false);
+    const report = generateReportFromExecution(activeWorkflow, executionLogs, context);
+    setReportContent(report);
   };
 
   const handleWheel = (e) => {
@@ -400,6 +588,47 @@ const WorkflowOrchestrator = () => {
         return { x: newX, y: newY };
       });
     }
+  };
+
+  const downloadReportHtml = () => {
+    if (!reportContent) return;
+    const htmlContent = `
+      <html>
+        <head>
+          <title>${reportContent.title}</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #333; }
+            h1 { color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+            .meta { color: #6b7280; font-size: 0.9em; margin-bottom: 30px; }
+            .section { margin-bottom: 24px; padding: 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
+            .section-title { font-weight: bold; color: #1e40af; margin-bottom: 10px; font-size: 1.1em; }
+            .content { white-space: pre-wrap; }
+            strong { color: #111; }
+          </style>
+        </head>
+        <body>
+          <h1>${reportContent.title}</h1>
+          <div class="meta">Generated on: ${reportContent.date}</div>
+          ${reportContent.sections.map(s => `
+            <div class="section">
+              <div class="section-title">${s.title}</div>
+              <div class="content">${s.content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>')}</div>
+            </div>
+          `).join('')}
+        </body>
+      </html>
+    `;
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${reportContent.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -512,7 +741,7 @@ const WorkflowOrchestrator = () => {
                     <button onClick={() => setShowBuilder(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                       Cancel
                     </button>
-                    <button className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
+                    <button onClick={() => setShowSaveModal(true)} className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
                       Save Workflow
                     </button>
                     <div className="flex items-center bg-gray-100 rounded-lg p-1 ml-2 border border-gray-300">
@@ -824,26 +1053,12 @@ const WorkflowOrchestrator = () => {
                           <p className="text-sm text-gray-600">All steps executed without errors</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div className="bg-white rounded p-3">
-                          <div className="text-xs text-gray-600">Total Time</div>
-                          <div className="text-xl font-bold text-green-600">47 min</div>
-                        </div>
-                        <div className="bg-white rounded p-3">
-                          <div className="text-xs text-gray-600">Sources Processed</div>
-                          <div className="text-xl font-bold text-blue-600">47</div>
-                        </div>
-                        <div className="bg-white rounded p-3">
-                          <div className="text-xs text-gray-600">Citations Verified</div>
-                          <div className="text-xl font-bold text-purple-600">23</div>
-                        </div>
-                      </div>
                       <div className="flex gap-3">
-                        <button className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center justify-center gap-2">
-                          <Eye size={18} />
-                          View Output
-                        </button>
-                        <button className="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 flex items-center justify-center gap-2">
+                        <button
+                          onClick={downloadReportHtml}
+                          disabled={!reportContent}
+                          className="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                           <Download size={18} />
                           Download Report
                         </button>
@@ -1015,7 +1230,7 @@ const WorkflowOrchestrator = () => {
               <div className="border-b px-6 py-4 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-800">
                   Configure {configuringModule.name}
-                  {configuringModule.name === 'Trigger' && <span className="text-sm font-normal text-gray-500 ml-2">(Step {configStep} of 2)</span>}
+
                 </h2>
                 <button onClick={() => setConfiguringModule(null)} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">
                   ×
@@ -1024,161 +1239,27 @@ const WorkflowOrchestrator = () => {
 
               <div className="p-6">
                 {configuringModule.name === 'Trigger' ? (
-                  <>
-                    {/* Step 1: Mode Selection */}
-                    {configStep === 1 && (
-                      <div className="space-y-3">
-                        <p className="font-medium text-gray-700 mb-2">Select Trigger Mode:</p>
-                        {['Topic Match', 'Jurisdiction Detection', 'Cross-Reference Detection'].map((option) => (
-                          <label key={option} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <div className="space-y-6">
+                    <div>
+                      <p className="font-medium text-gray-700 mb-2">Monitored Topics / Codes:</p>
+                      <div className="space-y-2 ml-1">
+                        {['§48', 'ERC', '1099-K'].map((item) => (
+                          <label key={item} className="flex items-center gap-2 cursor-pointer">
                             <input
-                              type="radio"
-                              name="triggerMode"
-                              value={option}
-                              checked={configFormData.triggerMode === option}
-                              onChange={(e) => setConfigFormData({ ...configFormData, triggerMode: e.target.value })}
-                              className="w-4 h-4 text-blue-600"
+                              type="checkbox"
+                              checked={configFormData.topics?.[item] || false}
+                              onChange={(e) => setConfigFormData({
+                                ...configFormData,
+                                topics: { ...configFormData.topics, [item]: e.target.checked }
+                              })}
+                              className="rounded text-blue-600"
                             />
-                            <span className="text-gray-800">{option}</span>
+                            <span className="text-gray-700">{item}</span>
                           </label>
                         ))}
                       </div>
-                    )}
-
-                    {/* Step 2: Details */}
-                    {configStep === 2 && (
-                      <div className="space-y-6">
-                        {configFormData.triggerMode === 'Topic Match' && (
-                          <>
-                            <div>
-                              <p className="font-medium text-gray-700 mb-2">Monitored Topics / Codes:</p>
-                              <div className="space-y-2 ml-1">
-                                {['§48', 'ERC', '1099-K'].map((item) => (
-                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={configFormData.topics?.[item] || false}
-                                      onChange={(e) => setConfigFormData({
-                                        ...configFormData,
-                                        topics: { ...configFormData.topics, [item]: e.target.checked }
-                                      })}
-                                      className="rounded text-blue-600"
-                                    />
-                                    <span>{item}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-700 mb-2">Content Source:</p>
-                              <div className="space-y-2 ml-1">
-                                {['IRS', 'State Authorities'].map((item) => (
-                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={configFormData.sources?.[item] || false}
-                                      onChange={(e) => setConfigFormData({
-                                        ...configFormData,
-                                        sources: { ...configFormData.sources, [item]: e.target.checked }
-                                      })}
-                                      className="rounded text-blue-600"
-                                    />
-                                    <span>{item}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {configFormData.triggerMode === 'Jurisdiction Detection' && (
-                          <>
-                            <div>
-                              <p className="font-medium text-gray-700 mb-2">Jurisdictions:</p>
-                              <div className="space-y-2 ml-1">
-                                {['California', 'New York'].map((item) => (
-                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={configFormData.jurisdictions?.[item] || false}
-                                      onChange={(e) => setConfigFormData({
-                                        ...configFormData,
-                                        jurisdictions: { ...configFormData.jurisdictions, [item]: e.target.checked }
-                                      })}
-                                      className="rounded text-blue-600"
-                                    />
-                                    <span>{item}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-700 mb-2">Authority Sources:</p>
-                              <div className="space-y-2 ml-1">
-                                {['CDTFA', 'State DOR'].map((item) => (
-                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={configFormData.authorities?.[item] || false}
-                                      onChange={(e) => setConfigFormData({
-                                        ...configFormData,
-                                        authorities: { ...configFormData.authorities, [item]: e.target.checked }
-                                      })}
-                                      className="rounded text-blue-600"
-                                    />
-                                    <span>{item}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {configFormData.triggerMode === 'Cross-Reference Detection' && (
-                          <>
-                            <div>
-                              <p className="font-medium text-gray-700 mb-2">Primary Authority Type:</p>
-                              <div className="space-y-2 ml-1">
-                                {['IRS Notice'].map((item) => (
-                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={configFormData.primaryAuth?.[item] || false}
-                                      onChange={(e) => setConfigFormData({
-                                        ...configFormData,
-                                        primaryAuth: { ...configFormData.primaryAuth, [item]: e.target.checked }
-                                      })}
-                                      className="rounded text-blue-600"
-                                    />
-                                    <span>{item}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-700 mb-2">Referenced Authority Types:</p>
-                              <div className="space-y-2 ml-1">
-                                {['Rev. Proc.', 'IRC Section'].map((item) => (
-                                  <label key={item} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={configFormData.referencedAuth?.[item] || false}
-                                      onChange={(e) => setConfigFormData({
-                                        ...configFormData,
-                                        referencedAuth: { ...configFormData.referencedAuth, [item]: e.target.checked }
-                                      })}
-                                      className="rounded text-blue-600"
-                                    />
-                                    <span>{item}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </>
+                    </div>
+                  </div>
                 ) : configuringModule.name === 'AI Analysis' ? (
                   <div className="space-y-6">
                     {/* Analysis Type */}
@@ -1356,7 +1437,7 @@ const WorkflowOrchestrator = () => {
                 </button>
 
                 {/* Back Button (Step 2) */}
-                {(configuringModule.name === 'Trigger' || configuringModule.name === 'Output') && configStep === 2 && (
+                {(configuringModule.name === 'Output') && configStep === 2 && (
                   <button
                     onClick={() => setConfigStep(1)}
                     className="px-4 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-medium"
@@ -1366,16 +1447,10 @@ const WorkflowOrchestrator = () => {
                 )}
 
                 {/* Next/Save Button */}
-                {(configuringModule.name === 'Trigger' && configStep === 1) || (configuringModule.name === 'Output' && configStep === 1) ? (
+                {(configuringModule.name === 'Output' && configStep === 1) ? (
                   <button
                     onClick={() => {
-                      if (configuringModule.name === 'Trigger') {
-                        if (configFormData.triggerMode) {
-                          setConfigStep(2);
-                        } else {
-                          alert('Please select a trigger mode');
-                        }
-                      } else if (configuringModule.name === 'Output') {
+                      if (configuringModule.name === 'Output') {
                         // Default to Local if nothing selected yet
                         if (!configFormData.destination) {
                           setConfigFormData(prev => ({ ...prev, destination: 'Local' }));
@@ -1412,6 +1487,94 @@ const WorkflowOrchestrator = () => {
           </div>
         )
       }
+
+      {/* Save Workflow Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-2xl p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Save Workflow</h3>
+            <p className="text-gray-600 mb-4">Give your workflow a name to save it to your library.</p>
+            <input
+              type="text"
+              placeholder="Workflow Name"
+              value={newWorkflowName}
+              onChange={(e) => setNewWorkflowName(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 outline-none"
+              autoFocus
+            />
+            <textarea
+              placeholder="Description (optional)"
+              value={newWorkflowDescription}
+              onChange={(e) => setNewWorkflowDescription(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg mb-6 focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveWorkflow}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Report Modal */}
+      {showReportModal && reportContent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b flex items-center justify-between bg-gray-50 rounded-t-lg">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-800">{reportContent.title}</h3>
+                <p className="text-sm text-gray-500">Generated on {reportContent.date}</p>
+              </div>
+              <button onClick={() => setShowReportModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">
+                ×
+              </button>
+            </div>
+
+            <div className="p-8 overflow-y-auto flex-1 font-sans">
+              <div className="prose max-w-none">
+                {reportContent.sections.map((section, idx) => (
+                  <div key={idx} className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-100 shadow-sm">
+                    <h4 className="text-lg font-bold text-blue-900 mb-3 border-b border-blue-200 pb-2 flex items-center gap-2">
+                      {idx + 1}. {section.title}
+                    </h4>
+                    <div className="text-gray-700 leading-relaxed whitespace-pre-wrap ml-1">
+                      {section.content.split('\n').map((line, i) => (
+                        <p key={i} className={`mb-1 ${line.startsWith('-') ? 'ml-4' : ''}`}>
+                          {line.split('**').map((part, j) => j % 2 === 1 ? <strong key={j} className="text-gray-900">{part}</strong> : part)}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-gray-50 rounded-b-lg flex justify-end gap-3">
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="px-6 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-medium"
+              >
+                Close
+              </button>
+              <button
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2 shadow-sm"
+              >
+                <Download size={18} />
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };
