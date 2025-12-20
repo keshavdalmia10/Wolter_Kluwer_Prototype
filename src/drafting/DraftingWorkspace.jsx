@@ -40,20 +40,6 @@ const DOCUMENTS = [
     shortTitle: 'Tax Deduction Analysis',
     lastModified: 'Modified today',
     content: 'The taxpayer claimed business expense deductions under IRC section 162(a) require examination of the profit motive standard. In Smith v. Commissioner, 138 T.C. 121 (2012), the Tax Court held that substantiation requirements under section 274(d) apply strictly to entertainment expenses.'
-  },
-  {
-    id: 'irc-183',
-    title: 'Client Memo - IRC 183 Hobby Loss Rules',
-    shortTitle: 'Client Memo - IRC 183',
-    lastModified: 'Modified yesterday',
-    content: 'The determination of whether an activity is engaged in for profit under IRC section 183 is a facts and circumstances test. The nine factors outlined in Treas. Reg. § 1.183-2(b) provide guidance but no single factor is determinative. Recent case law emphasizes the importance of business-like operations and the taxpayer\'s expertise.'
-  },
-  {
-    id: 'charitable',
-    title: 'Research: Charitable Contribution Substantiation',
-    shortTitle: 'Charitable Contribution Research',
-    lastModified: 'Modified 3 days ago',
-    content: 'Substantiation of charitable contributions under IRC section 170(f)(8) is strictly construed. A contemporaneous written acknowledgment (CWA) must be obtained for any contribution of $250 or more. The CWA must contain the amount of cash and a description of any property contributed, and whether any goods or services were provided in consideration.'
   }
 ];
 
@@ -75,6 +61,8 @@ const DraftingWorkspace = () => {
   const [showNewMemoOptions, setShowNewMemoOptions] = useState(false);
   const [showUpdateReview, setShowUpdateReview] = useState(false);
   const [garciaCitationAdded, setGarciaCitationAdded] = useState(false);
+  const [hobbyCitationAdded, setHobbyCitationAdded] = useState(false);
+  const [activeAlertId, setActiveAlertId] = useState(null);
   const [selectionPos, setSelectionPos] = useState(0);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestionSources, setSuggestionSources] = useState([]);
@@ -379,6 +367,30 @@ const DraftingWorkspace = () => {
     setShowAlert(false);
   };
 
+  const handleFixHobbyClaim = () => {
+    setHobbyCitationAdded(true);
+    const hobbyCitation = {
+      title: 'IRC section 183(d)',
+      type: 'Code',
+      quote: 'If the gross income derived from an activity for 3 or more of the taxable years in the period of 5 consecutive taxable years which ends with the taxable year exceeds the deductions attributable to such activity (determined without regard to whether or not such activity is engaged in for profit), then, unless the Secretary establishes to the contrary, such activity shall be presumed for purposes of this chapter for such taxable year to be an activity engaged in for profit.',
+      timestamp: new Date().toLocaleTimeString(),
+    };
+
+    setResearchMemory([
+      ...researchMemory,
+      {
+        claim: 'Presumption of profit motive applies if income exceeds deductions in 3 of 5 years',
+        authority: hobbyCitation.title,
+        quote: hobbyCitation.quote,
+        timestamp: new Date().toLocaleTimeString(),
+      }
+    ]);
+
+    setToaItems([...toaItems, hobbyCitation]);
+    setShowUpdateReview(false);
+    setActiveAlertId(null);
+  };
+
   const handleViewCase = async (query) => {
     // Open window immediately to prevent popup blocker
     const caseWindow = window.open('', '_blank');
@@ -599,14 +611,21 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
 
   const alerts = [
     {
+      id: 'outdated',
       type: 'outdated',
       title: 'Citation Update Available',
-      message:
-        'Durden v. Commissioner cited in your memo was distinguished in recent 11th Cir. decision',
+      message: 'Durden v. Commissioner cited in your memo was distinguished in recent 11th Cir. decision',
       severity: 'medium',
       date: '2 days ago',
     },
-
+    {
+      id: 'hobby-claim',
+      type: 'unsupported',
+      title: 'Unsupported Legal Standard',
+      message: 'Presumption of profit motive rule stated in Section III requires statutory citation.',
+      severity: 'high',
+      date: 'Just now',
+    },
   ];
 
   return (
@@ -1007,61 +1026,100 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
                           </button>
                         </div>
 
-                        <div className="space-y-4">
-                          <div className="bg-white rounded-lg p-4 border-l-4 border-orange-500">
-                            <div className="font-semibold text-gray-800 mb-2">Original Citation in Your Memo:</div>
-                            <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
-                              <strong>Durden v. Commissioner, T.C. Memo. 2012-140</strong>
-                              <div className="mt-1 text-xs text-gray-600">
-                                "The Tax Court strictly enforced this requirement, denying deductions where acknowledgment was obtained after the tax return filing."
+                        {activeAlertId === 'hobby-claim' ? (
+                          <div className="space-y-4">
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-yellow-500">
+                              <div className="font-semibold text-gray-800 mb-2">Unsupported Claim in Section III:</div>
+                              <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                                "Taxpayers automatically qualify for the presumption of profit motive if they have gross income exceeding deductions in 3 of 5 years."
+                                <div className="mt-1 text-xs text-yellow-600 font-medium">
+                                  Missing statutory authority.
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          <div className="bg-white rounded-lg p-4 border-l-4 border-green-500">
-                            <div className="font-semibold text-gray-800 mb-2">New Development:</div>
-                            <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
-                              <strong>Garcia v. Commissioner, 11th Cir. (2024)</strong>
-                              <div className="mt-1 text-xs text-gray-600">
-                                Distinguished Durden by holding that electronic acknowledgments (including emails with required information) satisfy IRC section 170(f)(8) requirements, even if received after return filing but before the filing deadline.
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <div className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                                <Lightbulb size={16} />
+                                Recommendation:
+                              </div>
+                              <div className="text-sm text-gray-700 mb-3">
+                                Cite <strong>IRC section 183(d)</strong> to support the presumption of profit motive rule.
                               </div>
                             </div>
-                          </div>
 
-                          <div className="bg-blue-50 rounded-lg p-4">
-                            <div className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                              <Lightbulb size={16} />
-                              Recommendation:
-                            </div>
-                            <div className="text-sm text-gray-700 mb-3">
-                              Consider adding a note that Durden's strict contemporaneous requirement has been modified in the 11th Circuit. If your client is in the 11th Circuit jurisdiction, Garcia may provide additional flexibility.
+                            <div className="flex gap-3">
+                              <button
+                                onClick={handleFixHobbyClaim}
+                                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700"
+                              >
+                                Add Citation (IRC § 183(d))
+                              </button>
+                              <button
+                                onClick={() => setShowUpdateReview(false)}
+                                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+                              >
+                                Close
+                              </button>
                             </div>
                           </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-orange-500">
+                              <div className="font-semibold text-gray-800 mb-2">Original Citation in Your Memo:</div>
+                              <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                                <strong>Durden v. Commissioner, T.C. Memo. 2012-140</strong>
+                                <div className="mt-1 text-xs text-gray-600">
+                                  "The Tax Court strictly enforced this requirement, denying deductions where acknowledgment was obtained after the tax return filing."
+                                </div>
+                              </div>
+                            </div>
 
-                          <div className="flex gap-3">
-                            <button
-                              onClick={handleAddGarciaCitation}
-                              disabled={garciaCitationAdded}
-                              className={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${garciaCitationAdded
-                                ? 'bg-green-600 text-white cursor-not-allowed'
-                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                            >
-                              {garciaCitationAdded ? 'Citation Added' : 'Add Citation'}
-                            </button>
-                            <button
-                              onClick={() => handleViewCase('Garcia v. Commissioner')}
-                              className="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 text-sm font-medium">
-                              View Full Case
-                            </button>
-                            <button
-                              onClick={() => setShowUpdateReview(false)}
-                              className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
-                            >
-                              Close
-                            </button>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-green-500">
+                              <div className="font-semibold text-gray-800 mb-2">New Development:</div>
+                              <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                                <strong>Garcia v. Commissioner, 11th Cir. (2024)</strong>
+                                <div className="mt-1 text-xs text-gray-600">
+                                  Distinguished Durden by holding that electronic acknowledgments (including emails with required information) satisfy IRC section 170(f)(8) requirements, even if received after return filing but before the filing deadline.
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <div className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                                <Lightbulb size={16} />
+                                Recommendation:
+                              </div>
+                              <div className="text-sm text-gray-700 mb-3">
+                                Consider adding a note that Durden's strict contemporaneous requirement has been modified in the 11th Circuit. If your client is in the 11th Circuit jurisdiction, Garcia may provide additional flexibility.
+                              </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                              <button
+                                onClick={handleAddGarciaCitation}
+                                disabled={garciaCitationAdded}
+                                className={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${garciaCitationAdded
+                                  ? 'bg-green-600 text-white cursor-not-allowed'
+                                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                                  }`}
+                              >
+                                {garciaCitationAdded ? 'Citation Added' : 'Add Citation'}
+                              </button>
+                              <button
+                                onClick={() => handleViewCase('Garcia v. Commissioner')}
+                                className="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 text-sm font-medium">
+                                View Full Case
+                              </button>
+                              <button
+                                onClick={() => setShowUpdateReview(false)}
+                                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+                              >
+                                Close
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
 
@@ -1071,6 +1129,15 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
                       <span className="bg-blue-100 px-1 rounded cursor-pointer hover:bg-blue-200 font-medium">IRC section 183</span>. The regulations at{' '}
                       <span className="bg-blue-100 px-1 rounded cursor-pointer hover:bg-blue-200 font-medium">Treas. Reg. section 1.183-2(b)</span>{' '}
                       establish a nine-factor test for determining profit motive. Courts apply these factors holistically, with no single factor being determinative.
+                      Taxpayers automatically qualify for the presumption of profit motive if they have gross income exceeding deductions in 3 of 5 years.
+                      {hobbyCitationAdded && (
+                        <>
+                          {' '}
+                          <span className="bg-blue-100 px-1 rounded cursor-pointer hover:bg-blue-200 font-medium border-2 border-blue-400">
+                            IRC section 183(d)
+                          </span>
+                        </>
+                      )}
                     </p>
 
                     <h2 className="text-xl font-bold text-gray-800 mb-4 mt-6">Conclusion</h2>
@@ -1206,75 +1273,111 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
                         </div>
                       ))}
 
-                      {/* Hardcoded alerts fallback (if no AI alerts yet) */}
-                      {activeFeature === 'flags' && !isCheckingUpdates && aiAuthorityUpdates.length === 0 && !garciaCitationAdded && alerts.map((alert, idx) => (
-                        <div
-                          key={idx}
-                          className={`border-l-4 p-3 rounded ${alert.severity === 'high' ? 'border-red-500 bg-red-50' : 'border-orange-500 bg-orange-50'
-                            }`}
-                        >
-                          <div className="flex items-start justify-between mb-1">
-                            <span className="font-semibold text-sm text-gray-800">{alert.title}</span>
-                            <span className="text-xs text-gray-500">{alert.date}</span>
+                      {activeFeature === 'flags' && !isCheckingUpdates && aiAuthorityUpdates.length === 0 &&
+                        alerts.filter(a => {
+                          if (a.id === 'outdated' && garciaCitationAdded) return false;
+                          if (a.id === 'hobby-claim') return false; // Don't show in main list
+                          return true;
+                        }).map((alert, idx) => (
+                          <div
+                            key={idx}
+                            className={`border-l-4 p-3 rounded ${alert.severity === 'high' ? 'border-red-500 bg-red-50' : 'border-orange-500 bg-orange-50'
+                              }`}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <span className="font-semibold text-sm text-gray-800">{alert.title}</span>
+                              <span className="text-xs text-gray-500">{alert.date}</span>
+                            </div>
+                            <p className="text-xs text-gray-700 mb-2">{alert.message}</p>
+                            <button
+                              onClick={() => {
+                                setShowUpdateReview(true);
+                                setActiveAlertId(alert.id);
+                              }}
+                              className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 text-orange-600 font-medium">
+                              Review
+                            </button>
                           </div>
-                          <p className="text-xs text-gray-700 mb-2">{alert.message}</p>
-                          <button
-                            onClick={() => setShowUpdateReview(true)}
-                            className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 text-orange-600 font-medium">
-                            Review
-                          </button>
-                        </div>
-                      ))}
+                        ))}
                     </div>
 
                     <div className="mt-4">
                       <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Unsupported Claims</h4>
 
-                      {aiUnsupportedClaims.length > 0 ? (
-                        aiUnsupportedClaims.map((claim, idx) => (
-                          <div key={idx} className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded relative group">
-                            <div className="flex items-start gap-2">
-                              <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={16} />
-                              <div className="flex-1">
-                                <div className="text-xs font-semibold text-yellow-900 mb-1">
-                                  Unsupported Assertion
-                                </div>
-                                <div className="text-xs text-gray-700 italic mb-2">
-                                  "{claim.claim}"
-                                </div>
-                                {claim.suggestedAuthority && (
-                                  <div className="bg-white p-2 rounded border border-yellow-100 mb-2">
-                                    <div className="text-xs font-medium text-gray-800 mb-1">
-                                      Suggested Support:
+                      {aiUnsupportedClaims.length > 0 || !hobbyCitationAdded ? (
+                        <>
+                          {!hobbyCitationAdded && (
+                            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded relative group">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={16} />
+                                <div className="flex-1">
+                                  <div className="flex justify-between items-start">
+                                    <div className="text-xs font-semibold text-red-900 mb-1">
+                                      Unsupported Legal Standard
                                     </div>
-                                    <div className="text-xs text-blue-600 font-medium cursor-pointer hover:underline mb-1">
-                                      {claim.suggestedAuthority.title}
-                                    </div>
-                                    <div className="text-xs text-gray-500">
-                                      {claim.suggestedAuthority.reason}
-                                    </div>
+                                    <span className="text-[10px] text-gray-500">Just now</span>
                                   </div>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    if (claim.suggestedAuthority) {
-                                      handleInsertCitation({
-                                        title: claim.suggestedAuthority.title,
-                                        quote: "Supporting authority inserted via AI suggestion.",
-                                        type: claim.suggestedAuthority.type || 'Case'
-                                      });
-                                      // Remove from list (optimistic update)
-                                      setAiUnsupportedClaims(prev => prev.filter((_, i) => i !== idx));
-                                    }
-                                  }}
-                                  className="text-xs bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700"
-                                >
-                                  Add Citation
-                                </button>
+                                  <div className="text-xs text-gray-700 italic mb-2">
+                                    "Presumption of profit motive rule stated in Section III requires statutory citation."
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      setShowUpdateReview(true);
+                                      setActiveAlertId('hobby-claim');
+                                    }}
+                                    className="text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                                  >
+                                    Review Issue
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          )}
+                          {aiUnsupportedClaims.map((claim, idx) => (
+                            <div key={idx} className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded relative group">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={16} />
+                                <div className="flex-1">
+                                  <div className="text-xs font-semibold text-yellow-900 mb-1">
+                                    Unsupported Assertion
+                                  </div>
+                                  <div className="text-xs text-gray-700 italic mb-2">
+                                    "{claim.claim}"
+                                  </div>
+                                  {claim.suggestedAuthority && (
+                                    <div className="bg-white p-2 rounded border border-yellow-100 mb-2">
+                                      <div className="text-xs font-medium text-gray-800 mb-1">
+                                        Suggested Support:
+                                      </div>
+                                      <div className="text-xs text-blue-600 font-medium cursor-pointer hover:underline mb-1">
+                                        {claim.suggestedAuthority.title}
+                                      </div>
+                                      <div className="text-xs text-gray-500">
+                                        {claim.suggestedAuthority.reason}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      if (claim.suggestedAuthority) {
+                                        handleInsertCitation({
+                                          title: claim.suggestedAuthority.title,
+                                          quote: "Supporting authority inserted via AI suggestion.",
+                                          type: claim.suggestedAuthority.type || 'Case'
+                                        });
+                                        // Remove from list (optimistic update)
+                                        setAiUnsupportedClaims(prev => prev.filter((_, i) => i !== idx));
+                                      }
+                                    }}
+                                    className="text-xs bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700"
+                                  >
+                                    Add Citation
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </>
                       ) : (
                         <div className="p-3 bg-green-50 border border-green-200 rounded flex items-center gap-2">
                           <CheckCircle className="text-green-600" size={16} />

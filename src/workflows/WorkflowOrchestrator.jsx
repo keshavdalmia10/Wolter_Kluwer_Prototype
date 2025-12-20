@@ -18,6 +18,7 @@ import {
   Eye,
   Download,
 } from 'lucide-react';
+import geminiService from '../api/geminiService';
 
 const WorkflowOrchestrator = () => {
   const [activeWorkflow, setActiveWorkflow] = useState(null);
@@ -442,26 +443,39 @@ const WorkflowOrchestrator = () => {
         const analysisType = config.analysisType || 'Standard Analysis';
         const topic = context.primaryTopic || 'General';
 
-        // Dynamic Content Generation based on Topic + Analysis Type
         let analysisContent = '';
-        if (topic.includes('ERC')) {
-          if (analysisType.includes('Risk')) {
-            analysisContent = "Audit Risk Assessment for Employee Retention Credit (ERC):\n- **High Risk**: Claims filed during moratorium period.\n- **Verification**: Cross-referenced with payroll deposits.\n- **Warning**: Reviewing for 'Supply Chain Disruption' substantiation.";
-          } else {
-            analysisContent = "ERC Client Impact Analysis:\n- Impact: Client may need to utilize the Voluntary Disclosure Program.\n- Financials: Refund amount of $142,000 flagged for review.\n- Action: Prepare substantiation docs for Q2 2021.";
-          }
-        } else if (topic.includes('48')) {
-          analysisContent = "Investment Credit (IRC §48) Findings:\n- **Base Rate**: Project qualifies for base 6% credit.\n- **Bonus Criteria**: Prevailing Wage & Apprenticeship requirements met.\n- **Domestic Content**: Preliminary materials review pending.";
-        } else if (topic.includes('1099')) {
-          analysisContent = "1099-K Payment Card Analysis:\n- **Threshold**: Transactions exceed $600 reporting limit.\n- **Reconciliation**: Discrepancy found between 1099-K gross amount and Schedule C reported income.\n- **State Rules**: State-specific backup withholding rules apply.";
+        let keyFindings = [];
+        let confidenceScore = 0.95;
+
+        // Try to get AI analysis
+        const aiResult = await geminiService.generateWorkflowAnalysis(topic, analysisType);
+
+        if (aiResult) {
+          analysisContent = aiResult.analysisResult;
+          keyFindings = aiResult.keyFindings || [];
+          confidenceScore = aiResult.confidenceScore || 0.95;
         } else {
-          analysisContent = `Standard Analysis for ${topic}:\n- Document classified and text extracted.\n- Key obligations identified.\n- Timelines established for response.`;
+          // Fallback to static logic if AI fails
+          if (topic.includes('ERC')) {
+            if (analysisType.includes('Risk')) {
+              analysisContent = "Audit Risk Assessment for Employee Retention Credit (ERC):\n- **High Risk**: Claims filed during moratorium period.\n- **Verification**: Cross-referenced with payroll deposits.\n- **Warning**: Reviewing for 'Supply Chain Disruption' substantiation.";
+            } else {
+              analysisContent = "ERC Client Impact Analysis:\n- Impact: Client may need to utilize the Voluntary Disclosure Program.\n- Financials: Refund amount of $142,000 flagged for review.\n- Action: Prepare substantiation docs for Q2 2021.";
+            }
+          } else if (topic.includes('48')) {
+            analysisContent = "Investment Credit (IRC §48) Findings:\n- **Base Rate**: Project qualifies for base 6% credit.\n- **Bonus Criteria**: Prevailing Wage & Apprenticeship requirements met.\n- **Domestic Content**: Preliminary materials review pending.";
+          } else if (topic.includes('1099')) {
+            analysisContent = "1099-K Payment Card Analysis:\n- **Threshold**: Transactions exceed $600 reporting limit.\n- **Reconciliation**: Discrepancy found between 1099-K gross amount and Schedule C reported income.\n- **State Rules**: State-specific backup withholding rules apply.";
+          } else {
+            analysisContent = `Standard Analysis for ${topic}:\n- Document classified and text extracted.\n- Key obligations identified.\n- Timelines established for response.`;
+          }
+          keyFindings = ['Analysis completed successfully', 'No critical errors found'];
         }
 
         output = {
           analysisResult: analysisContent,
-          keyFindings: ['Key finding 1', 'Key finding 2'],
-          confidenceScore: 0.98
+          keyFindings: keyFindings,
+          confidenceScore: confidenceScore
         };
         logEntry.details = `**${analysisType}** completed for **${topic}**.\n\n${analysisContent}\n\nConfidence: ${(output.confidenceScore * 100)}%.`;
         break;

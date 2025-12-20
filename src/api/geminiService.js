@@ -11,7 +11,7 @@
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 // Using gemini-pro as 1.5-flash returned 404
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 /**
  * Call Gemini API with a prompt
@@ -338,6 +338,42 @@ Format as a bulleted list.`;
   }
 }
 
+/**
+ * Generate AI analysis for a workflow step
+ * @param {string} topic - The topic being analyzed
+ * @param {string} analysisType - The type of analysis to perform
+ * @returns {Promise<Object>} The analysis result
+ */
+export async function generateWorkflowAnalysis(topic, analysisType) {
+  const prompt = `You are an expert tax analyst performing a ${analysisType} on the topic: "${topic}".
+
+Generate a professional analysis that includes:
+1. A detailed analysis result summarizing the situation.
+2. key findings (2-3 bullet points).
+3. A confidence score (0.0 - 1.0) based on the clarity of the topic.
+
+Respond in JSON format:
+{
+  "analysisResult": "The detailed analysis text...",
+  "keyFindings": ["Finding 1", "Finding 2"],
+  "confidenceScore": 0.95
+}
+
+Only return valid JSON.`;
+
+  try {
+    const response = await callGemini(prompt, { temperature: 0.4 });
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to generate workflow analysis:', error);
+    return null;
+  }
+}
+
 export default {
   detectUnsupportedClaims,
   enhanceCitationSuggestions,
@@ -345,4 +381,5 @@ export default {
   checkAuthorityUpdates,
   generateExecutiveSummary,
   summarizeCourtOpinion,
+  generateWorkflowAnalysis,
 };
