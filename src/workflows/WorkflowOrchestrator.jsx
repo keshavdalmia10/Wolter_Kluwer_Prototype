@@ -17,8 +17,10 @@ import {
   ArrowRight,
   Eye,
   Download,
+  HardDrive,
 } from 'lucide-react';
 import geminiService from '../api/geminiService';
+import DocumentStorage, { MOCK_DATABASE } from './DocumentStorage';
 
 const WorkflowOrchestrator = () => {
   const [activeWorkflow, setActiveWorkflow] = useState(null);
@@ -41,6 +43,7 @@ const WorkflowOrchestrator = () => {
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('');
   const [reportContent, setReportContent] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showDocuments, setShowDocuments] = useState(false);
 
   const [isExporting, setIsExporting] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -448,7 +451,7 @@ const WorkflowOrchestrator = () => {
         let confidenceScore = 0.95;
 
         // Try to get AI analysis
-        const aiResult = await geminiService.generateWorkflowAnalysis(topic, analysisType);
+        const aiResult = await geminiService.generateWorkflowAnalysis(topic, analysisType, MOCK_DATABASE);
 
         if (aiResult) {
           analysisContent = aiResult.analysisResult;
@@ -669,6 +672,7 @@ const WorkflowOrchestrator = () => {
             onClick={() => {
               setShowMetrics(false);
               setShowBuilder(false);
+              setShowDocuments(false);
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${!showMetrics && !showBuilder ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
@@ -680,12 +684,25 @@ const WorkflowOrchestrator = () => {
             onClick={() => {
               setShowMetrics(true);
               setShowBuilder(false);
+              setShowDocuments(false);
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${showMetrics ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
           >
             <BarChart3 size={18} />
             Analytics
+          </button>
+          <button
+            onClick={() => {
+              setShowMetrics(false);
+              setShowBuilder(false);
+              setShowDocuments(true);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${showDocuments ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+          >
+            <HardDrive size={18} />
+            Documents
           </button>
         </div>
       </div>
@@ -740,7 +757,11 @@ const WorkflowOrchestrator = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto bg-gray-50">
-          {showBuilder ? (
+          {showDocuments ? (
+            <div className="max-w-6xl mx-auto p-6">
+              <DocumentStorage />
+            </div>
+          ) : showBuilder ? (
             <div className="h-full flex flex-col">
               <div className="bg-white border-b p-4">
                 <div className="flex items-center justify-between mb-4">

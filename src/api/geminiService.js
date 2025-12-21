@@ -342,15 +342,34 @@ Format as a bulleted list.`;
  * Generate AI analysis for a workflow step
  * @param {string} topic - The topic being analyzed
  * @param {string} analysisType - The type of analysis to perform
+ * @param {Array} documents - Optional list of documents to include in analysis
  * @returns {Promise<Object>} The analysis result
  */
-export async function generateWorkflowAnalysis(topic, analysisType) {
+export async function generateWorkflowAnalysis(topic, analysisType, documents = []) {
+  // Format meaningful document summaries for the AI
+  let documentContext = '';
+  if (documents && documents.length > 0) {
+    const relevantDocs = documents.filter(d =>
+      d.description.toLowerCase().includes(topic.toLowerCase()) ||
+      d.filename.toLowerCase().includes(topic.toLowerCase()) ||
+      topic.toLowerCase().includes('general') // Include all if topic is general
+    );
+
+    if (relevantDocs.length > 0) {
+      documentContext = `
+The following available documents are relevant to this analysis:
+${relevantDocs.map(d => `- [${d.filename}]: ${d.description}`).join('\n')}
+`;
+    }
+  }
+
   const prompt = `You are an expert tax analyst performing a ${analysisType} on the topic: "${topic}".
+${documentContext}
 
 Generate a professional analysis that includes:
-1. A detailed analysis result summarizing the situation.
+1. A detailed analysis result summarizing the situation, specifically referencing the content of the provided documents if they are relevant.
 2. key findings (2-3 bullet points).
-3. A confidence score (0.0 - 1.0) based on the clarity of the topic.
+3. A confidence score (0.0 - 1.0) based on the clarity of the topic and available document info.
 
 Respond in JSON format:
 {

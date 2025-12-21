@@ -1247,7 +1247,7 @@ For the foregoing reasons, we REVERSE the decision of the Tax Court and REMAND f
                             <div>
                               <div className="font-semibold text-green-900">All Citations Up to Date</div>
                               <div className="text-sm text-green-800">
-                                No unsupported claims or outdated authorities detected.
+                                No outdated authorities detected.
                               </div>
                             </div>
                           </div>
