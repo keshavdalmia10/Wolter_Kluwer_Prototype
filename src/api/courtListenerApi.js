@@ -7,7 +7,7 @@
  * Get free token at: https://www.courtlistener.com/sign-in/
  */
 
-const BASE_URL = 'https://www.courtlistener.com/api/rest/v3';
+const BASE_URL = 'https://www.courtlistener.com/api/rest/v4';
 
 // API Key - set via environment variable or localStorage for dev
 const getApiKey = () => {
@@ -106,7 +106,7 @@ function normalizeResults(results) {
   return results.map((result) => ({
     id: result.id || result.cluster_id,
     title: result.caseName || result.case_name || 'Untitled Case',
-    type: mapCourtType(result.court),
+    type: mapCourtType(result.court || result.court_id),
     relevance: formatRelevance(result.score),
     quote: extractSnippet(result),
     reason: generateReason(result),
@@ -116,7 +116,7 @@ function normalizeResults(results) {
       : null,
     citation: formatCitation(result),
     metadata: {
-      court: result.court,
+      court: result.court || result.court_id,
       dateFiled: result.dateFiled || result.date_filed,
       docketNumber: result.docketNumber || result.docket_number,
       status: result.status,
@@ -181,8 +181,8 @@ function generateReason(result) {
   const year = result.dateFiled
     ? new Date(result.dateFiled).getFullYear()
     : result.date_filed
-    ? new Date(result.date_filed).getFullYear()
-    : null;
+      ? new Date(result.date_filed).getFullYear()
+      : null;
 
   if (year) {
     return `${court} decision (${year})`;
